@@ -424,7 +424,7 @@ function ApprovalConditionPanel({
                 보안 세션 유효함
               </p>
               <p className="text-xs text-gray-400 mt-0.5">
-                최초 로그인 인증됨 (Session-Based)
+                최종 승인 시 2차 인증 필수
               </p>
             </div>
           </div>
@@ -594,7 +594,7 @@ export function HighRiskApprovalPage() {
     if (pct >= 90) setDrawerScrollDone(true);
   }, []);
 
-  // [방어적 설계: 제약] 승인 조건: 스크롤 완료만 필요 (Session-Based 인증으로 2FA 불필요)
+  // [방어적 설계: 제약] 승인 조건 1단계: 본문 100% 스크롤 필수 (이후 2단계로 2FA 인증 진행 - 2차 보고서 UC-APP-01 반영)
   const canApprove = scrollDone;
   const canApproveDrawer = drawerScrollDone;
 
@@ -702,7 +702,7 @@ export function HighRiskApprovalPage() {
                   <FileText size={10} /> 예산 집행 품의서
                 </span>
                 <span className="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  <ShieldCheck size={10} /> 보안 세션 유효
+                  <ShieldCheck size={10} /> 2차 인증 대상
                 </span>
               </div>
             </div>
@@ -1062,8 +1062,7 @@ export function HighRiskApprovalPage() {
                           className="text-xs text-emerald-700"
                           style={{ fontWeight: 600 }}
                         >
-                          보안 세션 유효함 (Session-Based
-                          인증됨)
+                          고위험 보안 정책 적용
                         </p>
                       </div>
                       <div
