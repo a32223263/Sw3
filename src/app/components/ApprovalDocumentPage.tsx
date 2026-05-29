@@ -11,20 +11,10 @@ import {
   RichEditorPanel, isDocumentDataFilled, buildContentSnapshot, type DocumentData,
 } from "./RichEditorPanel";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
-// 💡 Form Engine 의 핵심: 스키마 단일 참조
 import { TEMPLATES, TemplateDefinition, ApprovalRole } from "./FormBuilderPage";
 
-/* ─── 타입 정의 ─── */
 type Approver = {
-  id: number;
-  name: string;
-  title: string;
-  dept: string;
-  order: number;
-  initials: string;
-  role: ApprovalRole;
-  canJunggyo?: boolean;
-  parallelGroup?: number;
+  id: number; name: string; title: string; dept: string; order: number; initials: string; role: ApprovalRole; canJunggyo?: boolean; parallelGroup?: number;
 };
 
 const MOCK_EMPLOYEES = [
@@ -36,7 +26,6 @@ const MOCK_EMPLOYEES = [
 type FileItem = { id: number; name: string; size: string; isPdf?: boolean };
 type OcrStatus = "processing" | "done";
 
-/* ─── 결재자 추가 모달 (사용자 검색 기능) ─── */
 function AddApproverModal({ onClose, onAdd }: { onClose: () => void; onAdd: (emp: typeof MOCK_EMPLOYEES[0]) => void; }) {
   const [searchTerm, setSearchTerm] = useState("");
   const filtered = MOCK_EMPLOYEES.filter((e) => e.name.includes(searchTerm) || e.dept.includes(searchTerm));
@@ -72,8 +61,8 @@ function AddApproverModal({ onClose, onAdd }: { onClose: () => void; onAdd: (emp
   );
 }
 
-/* ─── 상신 확인 모달 ─── */
-function SubmitConfirmModal({ formType, approvers, onConfirm, onClose }: { formType: string; approvers: { name: string; title: string }[]; onConfirm: () => void; onClose: () => void; }) {
+// 💡 [E2 방어 로직] 모달 파라미터에 isSubmitting 상태 주입 및 버튼 비활성화 연결
+function SubmitConfirmModal({ formType, approvers, onConfirm, onClose, isSubmitting }: { formType: string; approvers: { name: string; title: string }[]; onConfirm: () => void; onClose: () => void; isSubmitting?: boolean; }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onClose} />
@@ -101,20 +90,21 @@ function SubmitConfirmModal({ formType, approvers, onConfirm, onClose }: { formT
         </div>
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex gap-3 justify-end">
           <button onClick={onClose} className="px-5 py-2.5 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">돌아가기</button>
-          <button onClick={onConfirm} className="flex items-center gap-2 px-6 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"><Send size={13} /> 상신하기</button>
+          {/* 💡 [E2 방어 로직] 진행 중이면 버튼 잠금 적용 */}
+          <button onClick={onConfirm} disabled={isSubmitting} className={`flex items-center gap-2 px-6 py-2.5 text-sm rounded-lg transition-colors shadow-sm ${isSubmitting ? "bg-gray-400 text-white cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+            <Send size={13} /> {isSubmitting ? "처리 중..." : "상신하기"}
+          </button>
         </div>
       </motion.div>
     </div>
   );
 }
 
-/* ─── Skeleton ─── */
 function Sk({ w = "w-full", h = "h-4", cls = "" }: { w?: string; h?: string; cls?: string }) {
   return <div className={`${w} ${h} bg-gray-200 rounded animate-pulse ${cls}`} />;
 }
 function PageSkeleton() { return (<div className="p-6 space-y-5"><div className="flex items-center gap-2 mb-4"><Sk w="w-20" h="h-3" /><Sk w="w-2" h="h-3" /><Sk w="w-28" h="h-3" /></div><div className="flex gap-5"><div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-200"><Sk w="w-36" h="h-5" /></div><div className="px-6 py-5 space-y-5"><div className="space-y-1.5"><Sk w="w-16" h="h-3" /><Sk h="h-10" cls="rounded-md" /></div><div className="space-y-2"><Sk w="w-20" h="h-3" /><Sk h="h-10" cls="rounded-md" /><Sk h="h-14" cls="rounded-md" /></div><div className="space-y-1.5"><Sk w="w-8" h="h-3" /><Sk h="h-10" cls="rounded-md" /></div><div className="space-y-1.5"><Sk w="w-20" h="h-3" /><div className="border border-gray-200 rounded-lg h-64 bg-gray-50" /></div></div></div><div className="w-60 space-y-4 shrink-0"><div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3"><Sk w="w-28" h="h-4" />{[...Array(6)].map((_, i) => (<div key={i} className="flex justify-between"><Sk w="w-16" h="h-3" /><Sk w="w-20" h="h-3" /></div>))}</div><div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4"><Sk w="w-28" h="h-4" />{[...Array(3)].map((_, i) => (<div key={i} className="flex items-center gap-3"><Sk w="w-9" h="h-9" cls="rounded-full" /><div className="flex-1 space-y-1.5"><Sk w="w-16" h="h-3" /><Sk w="w-24" h="h-2.5" /></div></div>))}</div></div></div></div>); }
 
-/* ─── [요구사항 F] 동적 병렬 결재선 트리 렌더러 ─── */
 function ApprovalTreeRenderer({ approvers }: { approvers: Approver[] }) {
   const stages: Array<{ type: "serial"; approver: Approver } | { type: "parallel"; approvers: Approver[] }> = [];
   const groups = new Map<number, Approver[]>();
@@ -209,25 +199,26 @@ function ApprovalTreeRenderer({ approvers }: { approvers: Approver[] }) {
   );
 }
 
-/* ─── Main Page ─── */
 export function ApprovalDocumentPage() {
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
   const [isLoading, setIsLoading] = useState(true);
   
-  // 💡 [해결 1] FormBuilder의 TEMPLATES 스키마를 유일한 기준으로 사용합니다.
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateDefinition>(TEMPLATES[0]);
   const [isFormDropdownOpen, setIsFormDropdownOpen] = useState(false);
   const [title, setTitle] = useState(`2026년 2분기 ${TEMPLATES[0].name} 기안`);
   
-  // 💡 [해결 3] 템플릿(FormBuilder)에 정의된 직위/직책/역할/전결 기준 결재선 자동 생성
+  // 💡 [E1, E2 방어용 상태값 정의]
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const currentApproverId = "user123"; // 모의 접속자 아이디
+  const authorId = "user123"; // 기안자 아이디
+
   const generateApproversFromTemplate = (tpl: TemplateDefinition): Approver[] => {
     let mappingFailed = false;
     const ts = Date.now();
     const result = tpl.defaultApproverLine.map((step, idx) => {
-      // 실제 시스템에서는 GET /api/v1/users?job_title=... API 연동
       const matchedEmployee = MOCK_EMPLOYEES.find(e => e.title === step.job_title);
-      if (!matchedEmployee) mappingFailed = true; // [E3] 예외 발생 감지 플래그
+      if (!matchedEmployee) mappingFailed = true; 
     
       return {
         id: ts + idx,
@@ -243,7 +234,6 @@ export function ApprovalDocumentPage() {
     });
 
     if (mappingFailed) {
-      // E3: 템플릿 매핑 실패 (자동 매핑될 사용자가 없는 경우)
       setTimeout(() => {
         toast.error("해당 결재 역할에 매핑된 사용자가 없습니다.", {
           description: "결재자를 직접 지정하도록 결재선을 수정해주세요."
@@ -280,7 +270,6 @@ export function ApprovalDocumentPage() {
 
   const isTitleFilled = title.trim().length > 0;
   const isBodyFilled = isDocumentDataFilled(selectedTemplate, documentData);
-  // 결재자 미지정 상태에서도 버튼은 활성화해두고(클릭 시 E1 예외 로직 태우기 위해), 나머지 필수조건만 활성화 여부에 둡니다.
   const isSubmitEnabled = isTitleFilled && isBodyFilled;
 
   const missingFields: string[] = [];
@@ -361,26 +350,28 @@ export function ApprovalDocumentPage() {
   const handleSubmit = () => {
     if (!isSubmitEnabled) return;
 
-    // E1. 결재자 미지정 확인
-    if (approvers.length === 0) {
-      toast.error("결재자는 최소 1명 이상 지정해야 합니다.");
-      setShowAddApproverModal(true); // E1b: 결재선 수정 UI 유도
+    // 💡 [E1 방어 로직] 기안자 또는 현재 결재 권한이 맞는지 체크 (상신/승인 전 권한 체크)
+    if (authorId !== currentApproverId) {
+      toast.error("권한 오류", { description: "문서의 권한 대상자가 아닙니다." });
       return;
     }
 
-    // E2. 동일 결재자 중복 지정 확인
+    if (approvers.length === 0) {
+      toast.error("결재자는 최소 1명 이상 지정해야 합니다.");
+      setShowAddApproverModal(true); 
+      return;
+    }
+
     const duplicates = new Set();
     for (const a of approvers) {
       const checkKey = `${a.name}_${a.role}`; 
       if (duplicates.has(checkKey)) {
         toast.error("동일 사용자를 동일 역할에 중복 지정할 수 없습니다.", { description: "결재선을 확인해주세요." });
-        return; // E2d: 수정 UI 유도는 화면 내 결재선 목록을 직접 수정하게 됨
+        return; 
       }
       duplicates.add(checkKey);
     }
 
-    // E4. 권한 없는 결재자 지정 확인
-    // (예: E3에서 매핑 실패해 '자동할당'이 남았거나, 사원이 '결재' 역할을 부여받은 목업 조건)
     const hasUnauthorized = approvers.some(a => 
       a.name.includes("자동할당") || (a.role === "결재" && a.title === "사원")
     );
@@ -389,32 +380,40 @@ export function ApprovalDocumentPage() {
       return;
     }
 
-    // 검증 모두 통과 시 상신 확인 모달 오픈
     setShowSubmitModal(true);
   };
 
   const handleConfirmSubmit = () => {
+    // 💡 [E2 방어 로직] 진행 중일 때 더블 클릭 중복 차단 방지 락(Lock)
+    if (isSubmitting) {
+      toast.error("이미 처리 중인 결재입니다.");
+      return;
+    }
+    
+    setIsSubmitting(true);
+
     if (!isOnline) {
       toast.success("상신 내용이 대기열에 저장되었습니다. 네트워크 복구 시 자동 전송됩니다.");
       setShowSubmitModal(false);
+      setIsSubmitting(false);
       return;
     }
 
     try {
-      // E5 악성 스크립트 검증은 문서 html 추출부(buildContentSnapshot) 내부에서 수행
       buildContentSnapshot(selectedTemplate, documentData);
       
       setShowSubmitModal(false);
       toast.success("문서가 성공적으로 상신되었습니다.");
       navigate("/drafts/1");
     } catch (err: any) {
-      // E5. 악성 콘텐츠 탐지 시 트랜잭션 전면 취소
       if (err.message === "INVALID_SECURITY_CONTENT") {
         toast.error("허용되지 않는 악성 스크립트나 태그가 포함되어 있습니다.", {
           description: "400 Bad Request / INVALID_SECURITY_CONTENT"
         });
         setShowSubmitModal(false);
       }
+    } finally {
+      setIsSubmitting(false); // 락 해제
     }
   };
 
@@ -481,7 +480,6 @@ export function ApprovalDocumentPage() {
                         </div>
                       )}
 
-                      {/* 💡 템플릿의 속성(parallelGroup 유무)에 따라 트리 혹은 선형으로 렌더링 분기 */}
                       {hasParallel ? (
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                           <ApprovalTreeRenderer approvers={approvers} />
@@ -520,7 +518,6 @@ export function ApprovalDocumentPage() {
                       </div>
                     </div>
 
-                    {/* 💡 OCP 적용: 선택된 스키마를 Form Engine 으로 주입 */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-sm text-gray-700">문서 내용 <span className="text-red-500">*</span></label>
@@ -586,7 +583,6 @@ export function ApprovalDocumentPage() {
                   </div>
                 </div>
 
-                {/* ─── 우측 패널 ─── */}
                 <div className="w-60 space-y-4 shrink-0">
                   <div className="bg-white rounded-lg border border-gray-200 p-4">
                     <div className="flex items-center gap-2 mb-3"><FileText size={14} className="text-blue-500" /><h4 className="text-gray-700 text-sm" style={{ fontWeight: 600 }}>문서 기본 정보</h4></div>
@@ -641,7 +637,7 @@ export function ApprovalDocumentPage() {
       </AnimatePresence>
 
       {showAddApproverModal && <AddApproverModal onClose={() => setShowAddApproverModal(false)} onAdd={handleAddManualApprover} />}
-      {showSubmitModal && <SubmitConfirmModal formType={selectedTemplate.name} approvers={approvers.map((a) => ({ name: a.name, title: a.title }))} onConfirm={handleConfirmSubmit} onClose={() => setShowSubmitModal(false)} />}
+      {showSubmitModal && <SubmitConfirmModal formType={selectedTemplate.name} approvers={approvers.map((a) => ({ name: a.name, title: a.title }))} onConfirm={handleConfirmSubmit} onClose={() => setShowSubmitModal(false)} isSubmitting={isSubmitting} />}
     </>
   );
 }

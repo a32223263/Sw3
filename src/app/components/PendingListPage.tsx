@@ -123,7 +123,6 @@ function ListSkeleton() {
   );
 }
 
-/* ─── [방어적 설계: 재확인] 일괄 승인 확인 모달 ─── */
 function BatchConfirmDialog({
   count,
   onConfirm,
@@ -223,12 +222,10 @@ export function PendingListPage() {
   const batchableIds = new Set(batchableDocs.map((d) => d.id));
   const selectedBatchable = [...selected].filter((id) => batchableIds.has(id));
 
-  // 💡 [피드백 반영] 개별 선택 토글: 고위험 문서는 선택 원천 차단
   const toggleDoc = (id: string) => {
     const doc = docs.find((d) => d.id === id);
     if (!doc) return;
     
-    // 고위험 문서는 체크 불가 & 토스트 안내 (모달 대신)
     if (doc.risk === "HIGH" || !doc.canBatch) {
       toast.error("고위험 문서는 일괄 승인이 불가하며, 개별 2FA 인증이 필요합니다.", {
         icon: <ShieldAlert size={16} className="text-red-500" />
@@ -244,7 +241,6 @@ export function PendingListPage() {
   const allBatchSelected = batchableDocs.length > 0 && selectedBatchable.length === batchableDocs.length;
   const someBatchSelected = selectedBatchable.length > 0 && !allBatchSelected;
 
-  // 💡 [피드백 반영] 전체 선택 시: 일반 문서들만 선택되게 처리
   const toggleAll = () => {
     if (allBatchSelected) {
       setSelected(new Set());
@@ -255,6 +251,18 @@ export function PendingListPage() {
 
   const handleBatchClick = () => {
     if (selectedBatchable.length === 0) return;
+
+    // 💡 [E6 방어 로직] 혹시라도 필터를 뚫고 선택된 문서 중에 고위험 문서가 존재하는지 강제 재검증
+    const selectedDocsList = docs.filter(d => selected.has(d.id));
+    const hasHighRisk = selectedDocsList.some(doc => doc.risk === "HIGH" || !doc.canBatch);
+    
+    if (hasHighRisk) {
+      toast.error("고위험 문서는 일괄 결재할 수 없습니다.", { 
+        description: "선택 항목 중 고위험 문서가 포함되어 있습니다. 개별 확인 후 승인해주세요." 
+      });
+      return; // 확인 모달 자체를 띄우지 않고 트랜잭션 중단
+    }
+
     setShowBatchConfirm(true);
   };
 
@@ -510,7 +518,6 @@ export function PendingListPage() {
         </div>
       </div>
 
-      {/* 일괄 승인 재확인 모달 */}
       {showBatchConfirm && (
         <BatchConfirmDialog
           count={selectedBatchable.length}

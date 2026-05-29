@@ -26,7 +26,7 @@ import {
   type FormType,
   type DocumentData,
 } from "./RichEditorPanel";
-
+import { TEMPLATES } from "./FormBuilderPage";
 /* ─────────────────────────────────────────────────
    Types & Mock Data Registry
 ───────────────────────────────────────────────── */
@@ -111,8 +111,13 @@ function EditModal({ title, formType, documentData, onSave, onClose }: any) {
   const [editTitle, setEditTitle] = useState(title);
   const [editData, setEditData] = useState<DocumentData>({ ...documentData });
 
+  // 💡 해결 1: formType(문자열)을 기반으로 실제 TemplateSchema 객체를 찾아옵니다.
+  const templateSchema = TEMPLATES.find((t) => t.name === formType) || TEMPLATES[0];
+
   const handleFieldChange = (key: string, val: string) => setEditData((prev) => ({ ...prev, [key]: val }));
-  const canSave = editTitle.trim().length > 0 && isDocumentDataFilled(formType, editData);
+  
+  // 💡 해결 2: isDocumentDataFilled 에 문자열이 아닌 templateSchema 객체를 전달합니다.
+  const canSave = editTitle.trim().length > 0 && isDocumentDataFilled(templateSchema, editData);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -141,8 +146,10 @@ function EditModal({ title, formType, documentData, onSave, onClose }: any) {
 
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">문서 내용 (서식 기반 수정) <span className="text-red-500">*</span></label>
+            
+            {/* 💡 해결 3: formType={formType} 대신 templateSchema={templateSchema} 를 전달합니다. */}
             <RichEditorPanel
-              formType={formType}
+              templateSchema={templateSchema}
               documentData={editData}
               onChange={handleFieldChange}
               approvers={[{ name: "김기훈", title: "팀장", order: 1 }]}
@@ -151,6 +158,7 @@ function EditModal({ title, formType, documentData, onSave, onClose }: any) {
               date="2026-05-05"
               docNo="2026-IT-00123"
             />
+            
           </div>
         </div>
 

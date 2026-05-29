@@ -110,7 +110,6 @@ function ApproveConfirmModal({
   const [comment, setComment] = useState("");
   const [otp, setOtp] = useState("");
 
-  // OTP가 4자리 이상 입력되어야 승인 버튼 활성화
   const canConfirm = otp.length >= 4;
 
   return (
@@ -158,7 +157,6 @@ function ApproveConfirmModal({
             자동 전달됩니다.
           </div>
 
-          {/* OTP 입력란 */}
           <div className="space-y-1.5">
             <label
               className="text-sm text-gray-700"
@@ -200,7 +198,14 @@ function ApproveConfirmModal({
             취소
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => {
+              // [E4 방어 로직] OTP 검증. 실패 시 에러 출력 및 진행 차단
+              if (otp !== "1234") {
+                toast.error("2차 인증에 실패했습니다.", { description: "올바른 인증 번호를 다시 입력해주세요. (Mock 정답: 1234)" });
+                return;
+              }
+              onConfirm();
+            }}
             disabled={!canConfirm}
             className={`flex items-center gap-2 px-6 py-2.5 text-sm rounded-lg transition-colors shadow-sm ${
               canConfirm
@@ -283,7 +288,6 @@ function RejectModal({
             ))}
           </div>
 
-          {/* [요구사항 G] 반려 대상 라디오 선택 */}
           <div className="space-y-2">
             <label className="text-sm text-gray-700">
               반려 대상 <span className="text-red-500">*</span>
@@ -399,7 +403,6 @@ function ApprovalConditionPanel({
 }) {
   return (
     <div className="space-y-3">
-      {/* 승인 조건 체크리스트 */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center gap-2 mb-3">
           <ShieldAlert size={14} className="text-blue-500" />
@@ -411,7 +414,6 @@ function ApprovalConditionPanel({
           </span>
         </div>
         <div className="space-y-2.5">
-          {/* [방어적 설계: 제약] 조건 1 — 보안 세션 (Mock: 항상 true) */}
           <div className="flex items-start gap-2.5 rounded-lg px-3 py-2.5 border bg-emerald-50 border-emerald-200">
             <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-emerald-500">
               <CheckCircle2 size={12} className="text-white" />
@@ -429,7 +431,6 @@ function ApprovalConditionPanel({
             </div>
           </div>
 
-          {/* [방어적 설계: 제약] 조건 2 — 본문 스크롤 확인 */}
           <div
             className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 border transition-colors ${
               scrollDone
@@ -489,7 +490,6 @@ function ApprovalConditionPanel({
         </div>
       </div>
 
-      {/* 결재 정보 */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-2.5">
         <h4
           className="text-gray-700 text-sm"
@@ -517,7 +517,6 @@ function ApprovalConditionPanel({
         ))}
       </div>
 
-      {/* 액션 버튼 */}
       <button
         onClick={() => canApprove && onReject()}
         className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-red-300 hover:text-red-600 transition-all"
@@ -561,7 +560,9 @@ export function HighRiskApprovalPage() {
     "approved" | "rejected" | null
   >(null);
 
-  // 오프라인 감지
+  // [E5 방어 로직] 합의자 Mock Data 추가
+  const MOCK_AGREEMENTS = [{ dept: "재무팀", status: "PENDING" }];
+
   useEffect(() => {
     if (!isOnline) {
       toast.warning(
@@ -578,6 +579,8 @@ export function HighRiskApprovalPage() {
       (scrollTop / (scrollHeight - clientHeight)) * 100,
     );
     setScrollPct(Math.min(pct, 100));
+    
+    // [E3 방어 로직] 스크롤을 95% 이상 내렸을 때만 승인 조건 활성화
     if (pct >= 95) {
       setScrollDone(true);
       setShowScrollHint(false);
@@ -594,7 +597,6 @@ export function HighRiskApprovalPage() {
     if (pct >= 90) setDrawerScrollDone(true);
   }, []);
 
-  // [방어적 설계: 제약] 승인 조건 1단계: 본문 100% 스크롤 필수 (이후 2단계로 2FA 인증 진행 - 2차 보고서 UC-APP-01 반영)
   const canApprove = scrollDone;
   const canApproveDrawer = drawerScrollDone;
 
@@ -660,7 +662,6 @@ export function HighRiskApprovalPage() {
   return (
     <>
       <div className="flex flex-col h-full">
-        {/* Page Header */}
         <div className="px-6 pt-5 pb-0 shrink-0">
           <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-3">
             <span
@@ -709,9 +710,7 @@ export function HighRiskApprovalPage() {
           </div>
         </div>
 
-        {/* Content Area — 데스크탑: 좌우 분할, 모바일: 단일 컬럼 */}
         <div className="flex flex-1 gap-5 px-6 pb-0 min-h-0">
-          {/* Document Viewer */}
           <div className="flex-1 flex flex-col min-h-0">
             <div className="bg-white rounded-t-lg border border-gray-200 border-b-0 shrink-0">
               <div className="px-5 py-3 flex items-center justify-between border-b border-gray-200">
@@ -750,7 +749,6 @@ export function HighRiskApprovalPage() {
                 className="absolute inset-0 overflow-y-auto bg-gray-50 border border-gray-200 border-t-0 rounded-b-lg"
               >
                 <div className="p-5 space-y-4">
-                  {/* 공문서 헤더 */}
                   <div className="border border-gray-300 overflow-hidden rounded-sm bg-white">
                     <div className="flex items-start justify-between px-6 py-4 border-b border-gray-300 bg-white gap-4">
                       <div className="flex items-center gap-4">
@@ -885,7 +883,6 @@ export function HighRiskApprovalPage() {
                     </div>
                   </div>
 
-                  {/* 본문 섹션 */}
                   <div className="bg-white border border-gray-200 rounded-sm px-6 py-5 space-y-6">
                     {DOC_SECTIONS.map((sec, i) => (
                       <div key={i}>
@@ -904,7 +901,6 @@ export function HighRiskApprovalPage() {
                     ))}
                   </div>
 
-                  {/* 서명란 */}
                   <div className="flex justify-end bg-white border border-gray-200 rounded-sm px-6 py-4">
                     <div className="text-right space-y-1">
                       <p className="text-xs text-gray-400">
@@ -922,7 +918,6 @@ export function HighRiskApprovalPage() {
                     </div>
                   </div>
 
-                  {/* 첨부파일 */}
                   <div className="bg-white border border-gray-200 rounded-sm px-6 py-4">
                     <p
                       className="text-xs text-gray-500 mb-3"
@@ -969,7 +964,6 @@ export function HighRiskApprovalPage() {
                 <div className="h-4" />
               </div>
 
-              {/* 스크롤 힌트 */}
               <AnimatePresence>
                 {showScrollHint && !scrollDone && (
                   <motion.div
@@ -999,7 +993,6 @@ export function HighRiskApprovalPage() {
             </div>
           </div>
 
-          {/* [요구사항 A] 데스크탑 우측 패널 — md 이상에서만 표시 */}
           <div className="hidden md:flex w-64 flex-col gap-4 shrink-0 overflow-y-auto pb-4">
             <ApprovalConditionPanel
               scrollDone={scrollDone}
@@ -1011,7 +1004,6 @@ export function HighRiskApprovalPage() {
           </div>
         </div>
 
-        {/* [요구사항 A] 모바일 하단 Floating Action Bar */}
         <div className="md:hidden shrink-0 px-4 py-3 bg-white border-t border-gray-200">
           <div className="flex items-center gap-3">
             <button
@@ -1045,13 +1037,11 @@ export function HighRiskApprovalPage() {
                       활성화됩니다.
                     </p>
                   </div>
-                  {/* 모바일 Drawer 내부 스크롤 요약 */}
                   <div
                     ref={drawerScrollRef}
                     onScroll={handleDrawerScroll}
                     className="flex-1 overflow-y-auto px-5 pb-4 space-y-4"
                   >
-                    {/* 조건 체크리스트 */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 border bg-emerald-50 border-emerald-200">
                         <CheckCircle2
@@ -1093,7 +1083,6 @@ export function HighRiskApprovalPage() {
                         </p>
                       </div>
                     </div>
-                    {/* 문서 요약 */}
                     <div className="space-y-3">
                       {DOC_SECTIONS.map((sec, i) => (
                         <div
@@ -1113,7 +1102,6 @@ export function HighRiskApprovalPage() {
                       ))}
                     </div>
                   </div>
-                  {/* 모바일 승인 버튼 */}
                   <div className="px-5 py-4 border-t border-gray-100">
                     <button
                       onClick={() => {
@@ -1145,16 +1133,13 @@ export function HighRiskApprovalPage() {
           </div>
         </div>
 
-        {/* 데스크탑 하단 액션바 */}
         <div className="hidden md:block shrink-0 mx-6 mb-5 mt-4">
           <div className="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between gap-4 shadow-sm">
             <div className="flex items-center gap-3 flex-wrap">
-              {/* 보안 세션 상태 */}
               <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700">
                 <ShieldCheck size={13} />{" "}
                 <span>보안 세션 유효 (Session-Based)</span>
               </div>
-              {/* 스크롤 상태 */}
               <div
                 className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border ${
                   scrollDone
@@ -1206,10 +1191,21 @@ export function HighRiskApprovalPage() {
         <ApproveConfirmModal
           onConfirm={() => {
             setShowApproveModal(false);
+            
+            // [E5 방어 로직] 합의자가 아직 PENDING 상태인지 검증하여 최종 완료를 지연
+            const hasPendingAgreements = MOCK_AGREEMENTS.some((a) => a.status === "PENDING");
+            
             setDone("approved");
-            toast.success("승인 완료", {
-              description: "결재가 정상적으로 처리되었습니다.",
-            });
+
+            if (hasPendingAgreements) {
+              toast.warning("합의 대기 중", {
+                description: "승인 처리되었으나, 미처리 합의자가 존재하여 최종 승인이 대기됩니다.",
+              });
+            } else {
+              toast.success("승인 완료", {
+                description: "결재가 정상적으로 처리되었습니다.",
+              });
+            }
           }}
           onClose={() => setShowApproveModal(false)}
         />
