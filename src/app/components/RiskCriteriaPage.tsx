@@ -399,12 +399,12 @@ export function RiskCriteriaPage() {
     const mockUser = { role: "USER", departmentId: "sales_dept" }; // 일반 유저 권한 부여
     const currentMenuDeptId = "sales_dept";
 
-    if (mockUser.role !== "DEPT_ADMIN") {
-      toast.error("접근 권한이 없습니다.", { description: "부서 관리자만 리스크 기준을 관리할 수 있습니다." });
+    // if (mockUser.role !== "DEPT_ADMIN") {
+    //   toast.error("접근 권한이 없습니다.", { description: "부서 관리자만 리스크 기준을 관리할 수 있습니다." });
       // 실제 환경에서는 navigate(-1) 등으로 튕겨내지만 시연을 위해 유지
-    } else if (mockUser.departmentId !== currentMenuDeptId) {
-      toast.error("타 부서 소관 거부", { description: "해당 부서 양식을 수정할 권한이 없습니다." });
-    }
+    // } else if (mockUser.departmentId !== currentMenuDeptId) {
+    //   toast.error("타 부서 소관 거부", { description: "해당 부서 양식을 수정할 권한이 없습니다." });
+    // }
   }, []);
 
   const getSimulatedRisk = () => {

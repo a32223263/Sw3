@@ -178,11 +178,11 @@ export function FormBuilderPage() {
     const mockUser = { role: "USER", departmentId: "sales_dept" }; 
     const currentFormDeptId = "sales_dept"; 
 
-    if (mockUser.role !== "DEPT_ADMIN") {
-      toast.error("접근 권한 없음", { description: "결재 양식을 수정할 부서 관리자 권한이 없습니다." });
-    } else if (mockUser.departmentId !== currentFormDeptId) {
-      toast.error("타 부서 소관 거부", { description: "해당 부서의 양식을 관리할 수 없습니다." });
-    }
+    // if (mockUser.role !== "DEPT_ADMIN") {
+    //   toast.error("접근 권한 없음", { description: "결재 양식을 수정할 부서 관리자 권한이 없습니다." });
+    // } else if (mockUser.departmentId !== currentFormDeptId) {
+    //   toast.error("타 부서 소관 거부", { description: "해당 부서의 양식을 관리할 수 없습니다." });
+    // }
   }, [templateId]);
 
   const selected = useMemo(() => fields.find((f) => f.id === selectedId) ?? null, [fields, selectedId]);
