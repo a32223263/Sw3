@@ -46,9 +46,13 @@ type FormField = {
 type Position = "제한 없음" | "사원" | "대리" | "과장" | "차장" | "부장" | "임원";
 type JobTitle = "제한 없음" | "부서원" | "파트장" | "팀장" | "실장" | "본부장" | "재무 책임자";
 
+type ApprovalRole = "결재" | "합의" | "참조"; // 역할 타입 추가
+
 type ApprovalStep = {
   position: Position;
   job_title: JobTitle;
+  role: ApprovalRole;      // 💡 추가
+  canJunggyo: boolean;     // 💡 추가
 };
 
 type TemplateId =
@@ -108,8 +112,8 @@ const TEMPLATES: TemplateDefinition[] = [
     id: "expense",
     name: "지출결의서",
     defaultApproverLine: [
-      { position: "과장", job_title: "팀장" },
-      { position: "부장", job_title: "본부장" },
+      { position: "과장", job_title: "팀장", role: "결재", canJunggyo: false },
+      { position: "부장", job_title: "본부장", role: "결재", canJunggyo: false },
     ],
     fields: [
       { id: "f1", type: "text",     label: "제목",        key: "title",        required: true },
@@ -125,9 +129,9 @@ const TEMPLATES: TemplateDefinition[] = [
     id: "equipment",
     name: "장비구매요청서",
     defaultApproverLine: [
-      { position: "과장", job_title: "팀장" },
-      { position: "부장", job_title: "본부장" },
-      { position: "임원", job_title: "재무 책임자" },
+      { position: "과장", job_title: "팀장", role: "결재", canJunggyo: false },
+      { position: "부장", job_title: "본부장", role: "결재", canJunggyo: false },
+      { position: "임원", job_title: "재무 책임자", role: "결재", canJunggyo: false },
     ],
     fields: [
       { id: "g1", type: "text",     label: "요청 제목",     key: "title",          required: true },
@@ -143,8 +147,8 @@ const TEMPLATES: TemplateDefinition[] = [
     id: "business_trip",
     name: "출장신청서",
     defaultApproverLine: [
-      { position: "대리", job_title: "팀장" },
-      { position: "부장", job_title: "본부장" },
+      { position: "대리", job_title: "팀장", role: "결재", canJunggyo: false },
+      { position: "부장", job_title: "본부장", role: "결재", canJunggyo: false },
     ],
     fields: [
       { id: "h1", type: "text",     label: "출장 목적",    key: "purpose",       required: true },
@@ -161,7 +165,7 @@ const TEMPLATES: TemplateDefinition[] = [
     id: "leave",
     name: "휴가신청서",
     defaultApproverLine: [
-      { position: "제한 없음", job_title: "팀장" },
+      { position: "제한 없음", job_title: "팀장", role: "결재", canJunggyo: false },
     ],
     fields: [
       { id: "i1", type: "select",   label: "휴가 종류",      key: "leave_type",  required: true, options: ["연차", "반차(오전)", "반차(오후)", "병가", "경조사"] },
@@ -177,8 +181,8 @@ const TEMPLATES: TemplateDefinition[] = [
     id: "overtime",
     name: "시간외근무신청서",
     defaultApproverLine: [
-      { position: "제한 없음", job_title: "팀장" },
-      { position: "과장",      job_title: "실장" },
+      { position: "제한 없음", job_title: "팀장", role: "결재", canJunggyo: false },
+      { position: "과장",      job_title: "실장", role: "결재", canJunggyo: false },
     ],
     fields: [
       { id: "j1", type: "date",     label: "근무 일자",    key: "work_date",     required: true },
@@ -553,6 +557,43 @@ export function FormBuilderPage() {
                       ))}
                     </select>
                   </div>
+                  {/* 💡 추가: 결재 방식 (역할) 설정 */}
+                  <div className="space-y-1 pt-1">
+                    <label className="text-xs text-gray-500 font-medium">
+                      결재 방식 (Role)
+                    </label>
+                    <select
+                      value={step.role ?? "결재"}
+                      onChange={(e) =>
+                        updateApprover(i, {
+                          role: e.target.value as ApprovalRole,
+                        })
+                      }
+                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:border-blue-400"
+                    >
+                      <option value="결재">순차 결재 (결재)</option>
+                      <option value="합의">병렬 합의 (동시 진행)</option>
+                      <option value="참조">참조 (합의 후 공유)</option>
+                    </select>
+                  </div>
+
+                  {/* 💡 추가: 전결 권한 설정 여부 */}
+                  <div className="flex items-center gap-2 pt-1.5">
+                    <input
+                      type="checkbox"
+                      id={`junggyo-${i}`}
+                      checked={step.canJunggyo ?? false}
+                      onChange={(e) =>
+                        updateApprover(i, {
+                          canJunggyo: e.target.checked,
+                        })
+                      }
+                      className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                    <label htmlFor={`junggyo-${i}`} className="text-xs text-gray-600 cursor-pointer selection:bg-transparent">
+                      해당 단계에 <span className="text-purple-600 font-bold">전결 권한</span> 부여
+                    </label>
+                  </div>
                 </div>
               ))}
             </div>
@@ -561,7 +602,7 @@ export function FormBuilderPage() {
               onClick={() =>
                 setApproverLine([
                   ...approverLine,
-                  { position: "제한 없음", job_title: "제한 없음" },
+                  { position: "제한 없음", job_title: "제한 없음", role: "결재", canJunggyo: false },
                 ])
               }
               className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-blue-600 border border-dashed border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"

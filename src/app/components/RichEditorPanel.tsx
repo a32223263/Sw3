@@ -684,58 +684,19 @@ export function RichEditorPanel({
   hideToolbar = false,
 }: RichEditorPanelProps) {
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-      {/* 웹 에디터 헤더 레이블 */}
-      <div className="px-3 py-1.5 bg-blue-600 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
-            <div className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
-            <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
-          </div>
-          <span className="text-xs text-blue-100">
-            {readonly ? "문서 뷰어" : "문서 편집기"}
-          </span>
-        </div>
-      </div>
-
-      {/* 툴바 */}
-      {!hideToolbar && !readonly && <EditorToolbar />}
-
-      {/* 문서 본문 영역 */}
-      <div className="p-5 space-y-5" style={{ background: "#fafafa" }}>
-        {/* 문서 헤더 */}
-        <DocHeader
-          formType={formType}
-          approvers={approvers}
-          writer={writer}
-          dept={dept}
-          date={date}
-          docNo={docNo}
-        />
-
-        {/* 양식별 템플릿 */}
-        <div className="bg-white border border-gray-200 rounded-sm px-5 py-4">
-          {formType === "장비 구매 요청서" ? (
-            <EquipmentPurchaseTemplate data={documentData} onChange={onChange} readonly={readonly} />
-          ) : formType === "출장 신청서" ? (
-            <BusinessTripTemplate data={documentData} onChange={onChange} readonly={readonly} />
-          ) : formType === "지출 결의서" ? (
-            <ExpenseResolutionTemplate data={documentData} onChange={onChange} readonly={readonly} />
-          ) : (
-            <GenericTemplate formType={formType} data={documentData} onChange={onChange} readonly={readonly} />
-          )}
-        </div>
-
-        {/* 서명란 */}
-        <div className="flex justify-end">
-          <div className="text-right space-y-1">
-            <p className="text-xs text-gray-400">위와 같이 결재를 요청합니다.</p>
-            <p className="text-xs text-gray-500">{date}</p>
-            <p className="text-sm text-gray-700" style={{ fontWeight: 600 }}>{dept} {writer} 올림</p>
-          </div>
-        </div>
-      </div>
+    <div className="dynamic-form-renderer space-y-4">
+      {templateSchema.fields.map(field => {
+        switch(field.type) {
+          case 'text':
+             return <input value={documentData[field.key]} onChange={(e) => onChange(field.key, e.target.value)} />;
+          case 'longtext':
+             // 여기서 툴바가 적용되는 contentEditable div나 가벼운 라이브러리를 사용해야 함
+             return <textarea value={documentData[field.key]} onChange={(e) => onChange(field.key, e.target.value)} />;
+          case 'table':
+             return <DynamicTableRenderer cols={field.cols} rows={field.rows} data={documentData[field.key]} onChange={onChange} />;
+          default: return null;
+        }
+      })}
     </div>
   );
 }
