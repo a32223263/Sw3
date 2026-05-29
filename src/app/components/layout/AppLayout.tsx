@@ -90,11 +90,9 @@ export function AppLayout({
   contentOverflow?: "scroll" | "hidden";
 }) {
   const location = useLocation();
-  const [sessionTimer, setSessionTimer] = useState(1799); // 29:59
-  const [showNotifications, setShowNotifications] =
-    useState(false);
-  const [notifications, setNotifications] =
-    useState(NOTIFICATIONS);
+  const [sessionTimer, setSessionTimer] = useState(1800); // 30:00 초기값 설정
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState(NOTIFICATIONS);
   const notifRef = useRef<HTMLDivElement>(null);
 
   // 보안 세션 카운트다운
@@ -117,16 +115,13 @@ export function AppLayout({
       }
     };
     document.addEventListener("mousedown", handler);
-    return () =>
-      document.removeEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   const fmtTimer = (s: number) =>
     `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
-  const unreadCount = notifications.filter(
-    (n) => n.unread,
-  ).length;
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -143,10 +138,7 @@ export function AppLayout({
             <div className="w-7 h-7 rounded bg-blue-600 flex items-center justify-center">
               <FileText size={14} className="text-white" />
             </div>
-            <span
-              className="text-sm text-gray-800"
-              style={{ fontWeight: 600 }}
-            >
+            <span className="text-sm text-gray-800" style={{ fontWeight: 600 }}>
               전자결재
             </span>
           </div>
@@ -170,9 +162,7 @@ export function AppLayout({
               {item.badge && (
                 <span
                   className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    isActive(item.path)
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 text-gray-600"
+                    isActive(item.path) ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
                   }`}
                 >
                   {item.badge}
@@ -188,10 +178,7 @@ export function AppLayout({
               <User size={13} className="text-gray-600" />
             </div>
             <div>
-              <p
-                className="text-xs text-gray-800"
-                style={{ fontWeight: 600 }}
-              >
+              <p className="text-xs text-gray-800" style={{ fontWeight: 600 }}>
                 {user.name}
               </p>
               <p className="text-xs text-gray-500">
@@ -206,10 +193,7 @@ export function AppLayout({
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 bg-white border-b border-gray-200 flex items-center px-5 gap-3 shrink-0">
           <div className="flex-1 max-w-sm relative">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               placeholder="검색어를 입력하세요..."
@@ -218,25 +202,36 @@ export function AppLayout({
           </div>
           <div className="flex-1" />
 
-          {/* [방어적 설계: 명확한 공지] 보안 세션 타이머 */}
+          {/* [방어적 설계: 명확한 공지] 보안 세션 타이머 & 연장 기능 */}
           <div
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border shadow-sm"
             style={{
-              background:
-                sessionTimer > 300 ? "#f0fdf4" : "#fef2f2",
-              borderColor:
-                sessionTimer > 300 ? "#bbf7d0" : "#fecaca",
+              background: sessionTimer > 300 ? "#f0fdf4" : "#fef2f2",
+              borderColor: sessionTimer > 300 ? "#bbf7d0" : "#fecaca",
               color: sessionTimer > 300 ? "#15803d" : "#dc2626",
               fontWeight: 600,
             }}
           >
             <Shield size={12} />
-            <span>
-              보안 세션 유효 ({fmtTimer(sessionTimer)})
-            </span>
+            <span>보안 세션 유효 ({fmtTimer(sessionTimer)})</span>
+            
+            {/* 💡 시간 연정 기능 연동 및 테마 동적 바인딩 버튼 추가 */}
+            <button
+              onClick={() => {
+                setSessionTimer(1800); // 30분으로 초기화
+              }}
+              className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded border transition-all cursor-pointer hover:brightness-95"
+              style={{
+                background: sessionTimer > 300 ? "#e2fbe8" : "#fcdede",
+                borderColor: sessionTimer > 300 ? "#16a34a" : "#dc2626",
+                color: sessionTimer > 300 ? "#16a34a" : "#dc2626",
+              }}
+            >
+              연장
+            </button>
           </div>
 
-          {/* [SRP 증명] 시스템 알림 센터 */}
+          {/* 시스템 알림 센터 */}
           <div className="relative" ref={notifRef}>
             <button
               onClick={() => setShowNotifications((p) => !p)}
@@ -256,10 +251,7 @@ export function AppLayout({
             {showNotifications && (
               <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                  <span
-                    className="text-sm text-gray-800"
-                    style={{ fontWeight: 600 }}
-                  >
+                  <span className="text-sm text-gray-800" style={{ fontWeight: 600 }}>
                     알림
                     {unreadCount > 0 && (
                       <span className="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">
@@ -270,10 +262,7 @@ export function AppLayout({
                   <button
                     onClick={() =>
                       setNotifications((n) =>
-                        n.map((item) => ({
-                          ...item,
-                          unread: false,
-                        })),
+                        n.map((item) => ({ ...item, unread: false })),
                       )
                     }
                     className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
@@ -289,37 +278,25 @@ export function AppLayout({
                       onClick={() =>
                         setNotifications((n) =>
                           n.map((item) =>
-                            item.id === notif.id
-                              ? { ...item, unread: false }
-                              : item,
+                            item.id === notif.id ? { ...item, unread: false } : item,
                           ),
                         )
                       }
                     >
                       <div className="mt-1 shrink-0">
                         {notif.type === "approved" && (
-                          <CheckCircle2
-                            size={14}
-                            className="text-emerald-500"
-                          />
+                          <CheckCircle2 size={14} className="text-emerald-500" />
                         )}
                         {notif.type === "rejected" && (
-                          <AlertTriangle
-                            size={14}
-                            className="text-red-500"
-                          />
+                          <AlertTriangle size={14} className="text-red-500" />
                         )}
                         {notif.type === "request" && (
                           <div className="w-3.5 h-3.5 rounded-full bg-blue-500" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-700 leading-relaxed">
-                          {notif.text}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {notif.time}
-                        </p>
+                        <p className="text-xs text-gray-700 leading-relaxed">{notif.text}</p>
+                        <p className="text-xs text-gray-400 mt-1">{notif.time}</p>
                       </div>
                       {notif.unread && (
                         <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1 shrink-0" />
@@ -335,9 +312,7 @@ export function AppLayout({
             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
               <User size={12} className="text-blue-600" />
             </div>
-            <span className="text-sm text-gray-700">
-              {user.name}
-            </span>
+            <span className="text-sm text-gray-700">{user.name}</span>
             <ChevronDown size={13} className="text-gray-400" />
           </button>
         </header>
