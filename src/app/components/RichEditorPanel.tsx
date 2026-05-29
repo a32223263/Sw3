@@ -765,10 +765,23 @@ export function isDocumentDataFilled(formType: FormType, data: DocumentData): bo
   return (data.purpose || "").trim().length > 0;
 }
 
-// 주의: 프론트엔드는 순수 HTML 텍스트만 전송합니다. XSS 방어 및 데이터 정제는 백엔드의 HtmlSanitizerAdapter(Filter Layer)에서 전적으로 수행합니다. (ADR-004 참조)
+// 주의: 프론트엔드는 서식이 적용된 HTML과 메타데이터 JSON을 분리 전송합니다.
+// XSS 방어 및 데이터 정제는 백엔드의 HtmlSanitizerAdapter에서 전적으로 수행합니다. (ADR-004 참조)
 export function buildContentSnapshot(formType: FormType, data: DocumentData): string {
-  const rows = Object.entries(data)
-    .map(([k, v]) => `<tr><th>${k}</th><td>${typeof v === "string" ? v : JSON.stringify(v)}</td></tr>`)
-    .join("");
-  return `<html><body><h1>${formType}</h1><table>${rows}</table></body></html>`;
+  // [추적성: UC-DOC-01 14단계] 실제 기업 서식을 반영한 리치 HTML 생성 시뮬레이션
+  let bodyHtml = "";
+  if (formType === "장비 구매 요청서") {
+    bodyHtml = `
+      <div class="company-format">
+        <h3>1. 구매 목적</h3><p>${data.purpose || "미입력"}</p>
+        <h3>2. 구매 내역</h3>
+        <table border="1">
+          <tr><th>품목명</th><td>${data.itemName || ""}</td><th>단가</th><td>${data.unitPrice || "0"}</td></tr>
+        </table>
+      </div>`;
+  } else {
+    bodyHtml = `<div class="generic-format"><p>${data.purpose || ""}</p></div>`;
+  }
+  
+  return `<html><body><h1>${formType}</h1>${bodyHtml}</body></html>`;
 }

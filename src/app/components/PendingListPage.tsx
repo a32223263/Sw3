@@ -242,13 +242,18 @@ export function PendingListPage() {
     if (allBatchSelected) {
       setSelected(new Set());
     } else {
-      // [방어적 설계: 제약] 전체 선택 시 HIGH 포함 여부 관계없이 일단 모두 선택
-      setSelected(new Set([...batchableDocs.map((d) => d.id)]));
+      // [방어적 설계: 제약] 의도적으로 전체 선택을 시도하게 한 뒤, 
+      // 배열에 고위험(canBatch: false) 문서가 섞여 있으면 상태를 업데이트하여 경고 배너를 유도합니다.
+      setSelected(new Set([...docs.map((d) => d.id)]));
     }
   };
 
-  // 수정 후: 고위험 문서 검사 블록 삭제
   const handleBatchClick = () => {
+    // [추적성: UC-APP-01 E6] 고위험 문서가 포함되어 있으면 일괄 승인 모달 대신 차단 모달을 띄움
+    if (hasHighRiskSelected) {
+      setShowBlockModal(true);
+      return;
+    }
     if (selectedBatchable.length === 0) return;
     setShowBatchConfirm(true);
   };
