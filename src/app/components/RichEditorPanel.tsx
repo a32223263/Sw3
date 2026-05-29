@@ -206,9 +206,10 @@ export function isDocumentDataFilled(templateSchema: TemplateDefinition, data: D
   });
 }
 
-// 💡 동적 HTML 스냅샷 생성
+// 💡 동적 HTML 스냅샷 생성 & E5 보안 검증 통합
 export function buildContentSnapshot(templateSchema: TemplateDefinition, data: DocumentData): string {
   let bodyHtml = `<div class="dynamic-format">`;
+  
   templateSchema.fields.forEach(field => {
     bodyHtml += `<h3>${field.label}</h3>`;
     if (field.type === 'table') {
@@ -228,5 +229,14 @@ export function buildContentSnapshot(templateSchema: TemplateDefinition, data: D
     }
   });
   bodyHtml += `</div>`;
-  return `<html><body><h1>${templateSchema.name}</h1>${bodyHtml}</body></html>`;
+  
+  const finalHtml = `<html><body><h1>${templateSchema.name}</h1>${bodyHtml}</body></html>`;
+
+  // [E5] 악성 콘텐츠(XSS) 포함 검증 로직 시뮬레이션
+  const xssPattern = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>|javascript:|onerror=/gi;
+  if (xssPattern.test(finalHtml)) {
+    throw new Error("INVALID_SECURITY_CONTENT");
+  }
+
+  return finalHtml;
 }

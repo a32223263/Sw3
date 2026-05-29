@@ -221,12 +221,13 @@ export function ApprovalDocumentPage() {
   const [title, setTitle] = useState(`2026년 2분기 ${TEMPLATES[0].name} 기안`);
   
   // 💡 [해결 3] 템플릿(FormBuilder)에 정의된 직위/직책/역할/전결 기준 결재선 자동 생성
-  // 1. generateApproversFromTemplate 함수 수정 (약 205번 라인 부근)
   const generateApproversFromTemplate = (tpl: TemplateDefinition): Approver[] => {
+    let mappingFailed = false;
     const ts = Date.now();
-    return tpl.defaultApproverLine.map((step, idx) => {
-      // 하드코딩 제거: 실제 시스템에서는 GET /api/v1/users?job_title=... 를 호출함을 가정
+    const result = tpl.defaultApproverLine.map((step, idx) => {
+      // 실제 시스템에서는 GET /api/v1/users?job_title=... API 연동
       const matchedEmployee = MOCK_EMPLOYEES.find(e => e.title === step.job_title);
+      if (!matchedEmployee) mappingFailed = true; // [E3] 예외 발생 감지 플래그
     
       return {
         id: ts + idx,
@@ -240,6 +241,17 @@ export function ApprovalDocumentPage() {
         parallelGroup: step.role === "합의" || step.role === "재무합의" ? 1 : undefined,
       };
     });
+
+    if (mappingFailed) {
+      // E3: 템플릿 매핑 실패 (자동 매핑될 사용자가 없는 경우)
+      setTimeout(() => {
+        toast.error("해당 결재 역할에 매핑된 사용자가 없습니다.", {
+          description: "결재자를 직접 지정하도록 결재선을 수정해주세요."
+        });
+      }, 100);
+    }
+
+    return result;
   };
 
   const [approvers, setApprovers] = useState<Approver[]>(generateApproversFromTemplate(TEMPLATES[0]));
@@ -267,13 +279,11 @@ export function ApprovalDocumentPage() {
   };
 
   const isTitleFilled = title.trim().length > 0;
-  const hasApprovers = approvers.length > 0;
-  // 💡 [해결 1] 하드코딩된 체크 대신 JSON 스키마를 순회하여 동적으로 검증합니다.
   const isBodyFilled = isDocumentDataFilled(selectedTemplate, documentData);
-  const isSubmitEnabled = isTitleFilled && isBodyFilled && hasApprovers;
+  // 결재자 미지정 상태에서도 버튼은 활성화해두고(클릭 시 E1 예외 로직 태우기 위해), 나머지 필수조건만 활성화 여부에 둡니다.
+  const isSubmitEnabled = isTitleFilled && isBodyFilled;
 
   const missingFields: string[] = [];
-  if (!hasApprovers) missingFields.push("결재선이 지정되지 않았습니다. 결재자를 추가해 주세요.");
   if (!isTitleFilled) missingFields.push("제목을 입력해주세요.");
   if (!isBodyFilled) missingFields.push("서식 필수 항목을 완성해주세요.");
 
@@ -323,7 +333,6 @@ export function ApprovalDocumentPage() {
 
     setTimeout(() => {
       setOcrStatus((prev) => ({ ...prev, [fakeFile.id]: "done" }));
-      // 동적 스키마 중 number 필드를 찾아 값을 채우는 시뮬레이션
       const targetKey = selectedTemplate.fields.find(f => f.type === "number")?.key;
       if (targetKey) setDocumentData((prev) => ({ ...prev, [targetKey]: "1,500,000" }));
       toast.success("OCR 텍스트 추출 완료", { description: "금액 필드에 1,500,000원이 자동 입력되었습니다." });
@@ -349,7 +358,40 @@ export function ApprovalDocumentPage() {
 
   const removeFile = (id: number) => setFiles((prev) => prev.filter((f) => f.id !== id));
 
-  const handleSubmit = () => { if (!isSubmitEnabled) return; setShowSubmitModal(true); };
+  const handleSubmit = () => {
+    if (!isSubmitEnabled) return;
+
+    // E1. 결재자 미지정 확인
+    if (approvers.length === 0) {
+      toast.error("결재자는 최소 1명 이상 지정해야 합니다.");
+      setShowAddApproverModal(true); // E1b: 결재선 수정 UI 유도
+      return;
+    }
+
+    // E2. 동일 결재자 중복 지정 확인
+    const duplicates = new Set();
+    for (const a of approvers) {
+      const checkKey = `${a.name}_${a.role}`; 
+      if (duplicates.has(checkKey)) {
+        toast.error("동일 사용자를 동일 역할에 중복 지정할 수 없습니다.", { description: "결재선을 확인해주세요." });
+        return; // E2d: 수정 UI 유도는 화면 내 결재선 목록을 직접 수정하게 됨
+      }
+      duplicates.add(checkKey);
+    }
+
+    // E4. 권한 없는 결재자 지정 확인
+    // (예: E3에서 매핑 실패해 '자동할당'이 남았거나, 사원이 '결재' 역할을 부여받은 목업 조건)
+    const hasUnauthorized = approvers.some(a => 
+      a.name.includes("자동할당") || (a.role === "결재" && a.title === "사원")
+    );
+    if (hasUnauthorized) {
+      toast.error("권한 없는 결재자가 포함되었습니다.", { description: "올바른 권한의 사용자로 수정해주세요." });
+      return;
+    }
+
+    // 검증 모두 통과 시 상신 확인 모달 오픈
+    setShowSubmitModal(true);
+  };
 
   const handleConfirmSubmit = () => {
     if (!isOnline) {
@@ -357,9 +399,23 @@ export function ApprovalDocumentPage() {
       setShowSubmitModal(false);
       return;
     }
-    buildContentSnapshot(selectedTemplate, documentData);
-    setShowSubmitModal(false);
-    navigate("/drafts/1");
+
+    try {
+      // E5 악성 스크립트 검증은 문서 html 추출부(buildContentSnapshot) 내부에서 수행
+      buildContentSnapshot(selectedTemplate, documentData);
+      
+      setShowSubmitModal(false);
+      toast.success("문서가 성공적으로 상신되었습니다.");
+      navigate("/drafts/1");
+    } catch (err: any) {
+      // E5. 악성 콘텐츠 탐지 시 트랜잭션 전면 취소
+      if (err.message === "INVALID_SECURITY_CONTENT") {
+        toast.error("허용되지 않는 악성 스크립트나 태그가 포함되어 있습니다.", {
+          description: "400 Bad Request / INVALID_SECURITY_CONTENT"
+        });
+        setShowSubmitModal(false);
+      }
+    }
   };
 
   const approvalTimeline = [
@@ -368,6 +424,7 @@ export function ApprovalDocumentPage() {
   ];
 
   const hasParallel = approvers.some(a => a.parallelGroup !== undefined);
+  const hasApprovers = approvers.length > 0;
 
   return (
     <>
@@ -514,7 +571,7 @@ export function ApprovalDocumentPage() {
                   <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                     <button className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors">임시저장</button>
                     <div className="relative" onMouseEnter={() => !isSubmitEnabled && setShowConstraintTooltip(true)} onMouseLeave={() => setShowConstraintTooltip(false)}>
-                      <button onClick={handleSubmit} disabled={!isSubmitEnabled} className={`flex items-center gap-2 px-6 py-2 text-sm rounded-md transition-all ${isSubmitEnabled ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm cursor-pointer" : "bg-gray-200 text-gray-400 cursor-not-allowed"}`}>
+                      <button onClick={handleSubmit} disabled={!isSubmitEnabled && isTitleFilled} className={`flex items-center gap-2 px-6 py-2 text-sm rounded-md transition-all ${isSubmitEnabled ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm cursor-pointer" : "bg-gray-200 text-gray-400 cursor-not-allowed"}`}>
                         {!isSubmitEnabled && <Lock size={13} />}
                         상신하기
                       </button>
