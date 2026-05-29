@@ -17,17 +17,15 @@ import {
   Building2,
   Calendar,
   Shield,
-  RefreshCw,
   FileText,
   Hash,
   Send,
   AlertTriangle,
   ArrowDown,
   Plus,
-  Trash2,
   Zap,
   Users,
-  ChevronLeft,
+  Search
 } from "lucide-react";
 import {
   RichEditorPanel,
@@ -38,7 +36,7 @@ import {
 } from "./RichEditorPanel";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 
-/* ─── 상수 ─── */
+/* ─── 상수 및 타입 정의 ─── */
 const FORM_TYPES: FormType[] = [
   "장비 구매 요청서",
   "출장 신청서",
@@ -47,7 +45,8 @@ const FORM_TYPES: FormType[] = [
   "업무 협조 요청서",
 ];
 
-type ApprovalRole = "기안" | "결재" | "합의" | "재무합의" | "참조";
+// '검토' 역할을 추가하여 폭넓은 결재선 표현
+type ApprovalRole = "기안" | "검토" | "결재" | "합의" | "재무합의" | "참조";
 
 type Approver = {
   id: number;
@@ -61,29 +60,134 @@ type Approver = {
   parallelGroup?: number;
 };
 
-// 병렬 합의 포함 기본 결재선
-const DEFAULT_APPROVERS: Approver[] = [
-  { id: 1, name: "김기훈", title: "팀장", dept: "IT 기획팀", order: 1, initials: "기", role: "결재" },
-  { id: 2, name: "이수연", title: "부장", dept: "전략기획본부", order: 2, initials: "수", role: "결재", canJunggyo: true },
+// 가상의 사내 임직원 목록 (결재자 추가용)
+const MOCK_EMPLOYEES = [
+  { id: "e1", name: "유제형", title: "본부장", dept: "경영지원본부", initials: "유" },
+  { id: "e2", name: "강현후", title: "팀장", dept: "재무팀", initials: "강" },
+  { id: "e3", name: "신아람", title: "부장", dept: "인사팀", initials: "신" },
+  { id: "e4", name: "이명수", title: "차장", dept: "마케팅팀", initials: "이" },
+  { id: "e5", name: "박정식", title: "과장", dept: "영업1팀", initials: "박" },
+  { id: "e6", name: "전민수", title: "대리", dept: "IT개발팀", initials: "전" },
+  { id: "e7", name: "김지호", title: "과장", dept: "보안팀", initials: "김" },
+  { id: "e8", name: "김선혜", title: "대리", dept: "기획팀", initials: "하" },
+  { id: "e9", name: "정준수", title: "사원", dept: "영업2팀", initials: "정" },
+  { id: "e10", name: "박성현", title: "사원", dept: "디자인팀", initials: "노" },
 ];
 
-// Role 기반 자동 결재선 (영업본부 기준)
-const ROLE_BASED_LINE: Approver[] = [
-  { id: 10, name: "김기훈", title: "영업팀장", dept: "영업팀", order: 1, initials: "기", role: "결재" },
-  { id: 11, name: "최상훈", title: "영업본부장", dept: "영업본부", order: 2, initials: "상", role: "결재" },
-  { id: 12, name: "박동수", title: "재무이사", dept: "재무팀", order: 3, initials: "동", role: "결재" },
-];
+// [핵심 로직] 양식별 직책 기반 결재선을 매번 새로운 ID와 함께 반환
+function getRoleBasedApprovers(form: FormType): Approver[] {
+  const ts = Date.now(); // 고유 ID 생성을 위한 타임스탬프
+  switch (form) {
+    case "장비 구매 요청서":
+      return [
+        { id: ts + 1, name: "김기훈", title: "팀장", dept: "IT 기획팀", order: 1, initials: "기", role: "검토" },
+        { id: ts + 2, name: "이수연", title: "본부장", dept: "전략기획본부", order: 2, initials: "수", role: "결재" },
+      ];
+    case "출장 신청서":
+    case "휴가 신청서":
+      return [
+        { id: ts + 3, name: "김기훈", title: "팀장", dept: "IT 기획팀", order: 1, initials: "기", role: "결재", canJunggyo: true },
+      ];
+    case "지출 결의서":
+      return [
+        { id: ts + 4, name: "김기훈", title: "팀장", dept: "IT 기획팀", order: 1, initials: "기", role: "검토" },
+        { id: ts + 5, name: "오재무", title: "팀장", dept: "재무팀", order: 2, initials: "재", role: "재무합의" },
+        { id: ts + 6, name: "이수연", title: "본부장", dept: "전략기획본부", order: 3, initials: "수", role: "결재" },
+      ];
+    case "업무 협조 요청서":
+      return [
+        { id: ts + 7, name: "김기훈", title: "팀장", dept: "IT 기획팀", order: 1, initials: "기", role: "결재" },
+        { id: ts + 8, name: "최개발", title: "팀장", dept: "개발1팀", order: 2, initials: "개", role: "합의" },
+      ];
+    default:
+      return [
+        { id: ts + 9, name: "김기훈", title: "팀장", dept: "IT 기획팀", order: 1, initials: "기", role: "결재" },
+      ];
+  }
+}
 
-// 병렬 합의 데모 결재선
-const PARALLEL_DEMO_LINE: Approver[] = [
-  { id: 20, name: "김철수", title: "기안자", dept: "IT기획팀", order: 0, initials: "철", role: "기안" },
-  { id: 21, name: "최상훈", title: "팀장", dept: "영업팀", order: 1, initials: "상", role: "합의", parallelGroup: 1 },
-  { id: 22, name: "박동수", title: "부장", dept: "재무팀", order: 1, initials: "동", role: "재무합의", parallelGroup: 1 },
-  { id: 23, name: "이정수", title: "본부장", dept: "전략기획본부", order: 2, initials: "정", role: "결재", canJunggyo: true },
-];
+// [핵심 로직] 병렬 합의 데모 결재선을 매번 새로운 ID와 함께 반환
+function getParallelDemoApprovers(): Approver[] {
+  const ts = Date.now();
+  return [
+    { id: ts + 11, name: "김기훈", title: "팀장", dept: "IT 기획팀", order: 1, initials: "기", role: "검토" },
+    { id: ts + 12, name: "최개발", title: "팀장", dept: "개발1팀", order: 2, initials: "개", role: "합의", parallelGroup: 1 },
+    { id: ts + 13, name: "정디잔", title: "팀장", dept: "UX디자인팀", order: 2, initials: "디", role: "합의", parallelGroup: 1 },
+    { id: ts + 14, name: "이수연", title: "본부장", dept: "전략기획본부", order: 3, initials: "수", role: "결재", canJunggyo: true },
+  ];
+}
 
 type FileItem = { id: number; name: string; size: string; isPdf?: boolean };
 type OcrStatus = "processing" | "done";
+
+/* ─── 결재자 추가 모달 (사용자 검색 기능) ─── */
+function AddApproverModal({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (emp: typeof MOCK_EMPLOYEES[0]) => void;
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const filtered = MOCK_EMPLOYEES.filter(
+    (e) => e.name.includes(searchTerm) || e.dept.includes(searchTerm)
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onClose} />
+      <motion.div
+        className="relative bg-white rounded-2xl shadow-2xl w-[400px] max-h-[80vh] flex flex-col overflow-hidden border border-gray-200"
+        initial={{ opacity: 0, scale: 0.94, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+      >
+        <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+          <h3 className="text-gray-800 font-bold text-sm">결재자 수동 추가</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+        </div>
+        <div className="p-4 border-b border-gray-100 bg-white">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="이름 또는 부서 검색"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-400 transition-colors"
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 bg-white min-h-[250px]">
+          {filtered.map((emp) => (
+            <div
+              key={emp.id}
+              className="flex items-center justify-between p-3 hover:bg-blue-50 rounded-lg transition-colors group cursor-pointer"
+              onClick={() => { onAdd(emp); onClose(); }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0 border border-blue-200">
+                  <span className="text-xs text-blue-700 font-bold">{emp.initials}</span>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-800">{emp.name} <span className="text-xs font-medium text-gray-500">{emp.title}</span></p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{emp.dept}</p>
+                </div>
+              </div>
+              <button className="text-xs font-bold text-blue-600 bg-white border border-blue-200 px-3 py-1.5 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                추가
+              </button>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="text-center py-10 text-sm text-gray-400">
+              검색 결과가 없습니다.
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
 
 /* ─── 상신 확인 모달 ─── */
 function SubmitConfirmModal({
@@ -125,9 +229,9 @@ function SubmitConfirmModal({
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-500">결재선</span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap justify-end pl-4">
                 {approvers.map((a, i) => (
-                  <span key={i} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+                  <span key={i} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full whitespace-nowrap mb-1">
                     {a.name} {a.title}
                   </span>
                 ))}
@@ -211,9 +315,7 @@ function PageSkeleton() {
 
 /* ─── [요구사항 F] 병렬 결재선 트리 렌더러 ─── */
 function ApprovalTreeRenderer({ approvers }: { approvers: Approver[] }) {
-  // 순차 단계와 병렬 그룹으로 분리
   const stages: Array<{ type: "serial"; approver: Approver } | { type: "parallel"; approvers: Approver[] }> = [];
-
   const groups = new Map<number, Approver[]>();
   const serials: Approver[] = [];
 
@@ -227,14 +329,12 @@ function ApprovalTreeRenderer({ approvers }: { approvers: Approver[] }) {
     }
   }
 
-  // order 기준으로 정렬하여 stages 구성
   const allOrders = new Set([...approvers.map((a) => a.order)]);
   for (const order of [...allOrders].sort()) {
     const serialAtOrder = serials.filter((a) => a.order === order);
     const parallelAtOrder = approvers.filter((a) => a.parallelGroup !== undefined && a.order === order);
 
     if (parallelAtOrder.length > 0) {
-      // 이미 추가된 병렬 그룹 중복 방지
       const alreadyAdded = stages.some((s) => s.type === "parallel" && s.approvers.some((a) => a.order === order));
       if (!alreadyAdded) {
         stages.push({ type: "parallel", approvers: parallelAtOrder });
@@ -247,6 +347,7 @@ function ApprovalTreeRenderer({ approvers }: { approvers: Approver[] }) {
 
   const ROLE_COLOR: Record<ApprovalRole, string> = {
     "기안": "bg-gray-100 text-gray-600 border-gray-200",
+    "검토": "bg-emerald-50 text-emerald-700 border-emerald-200",
     "결재": "bg-blue-50 text-blue-700 border-blue-200",
     "합의": "bg-purple-50 text-purple-700 border-purple-200",
     "재무합의": "bg-amber-50 text-amber-700 border-amber-200",
@@ -257,7 +358,6 @@ function ApprovalTreeRenderer({ approvers }: { approvers: Approver[] }) {
     <div className="flex flex-col items-center gap-0">
       {stages.map((stage, idx) => (
         <div key={idx} className="flex flex-col items-center w-full">
-          {/* 연결선 (첫 번째 제외) */}
           {idx > 0 && (
             <div className="flex flex-col items-center py-1">
               <div className="w-px h-4 bg-gray-300" />
@@ -266,7 +366,6 @@ function ApprovalTreeRenderer({ approvers }: { approvers: Approver[] }) {
           )}
 
           {stage.type === "serial" ? (
-            /* 순차 결재자 */
             <div className="flex flex-col items-center">
               <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center gap-3 shadow-sm min-w-[160px]">
                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
@@ -287,7 +386,6 @@ function ApprovalTreeRenderer({ approvers }: { approvers: Approver[] }) {
               </div>
             </div>
           ) : (
-            /* 병렬 합의 그룹 */
             <div className="w-full">
               <div className="border border-dashed border-blue-300 bg-blue-50/30 rounded-xl p-3">
                 <p className="text-xs text-blue-600 text-center mb-2" style={{ fontWeight: 600 }}>병렬 합의 (동시 진행)</p>
@@ -321,16 +419,20 @@ export function ApprovalDocumentPage() {
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
   const [isLoading, setIsLoading] = useState(true);
+  
+  // 기본값을 '지출 결의서'로 두되, 초기 결재선도 맞춰서 생성합니다.
   const [selectedForm, setSelectedForm] = useState<FormType>("지출 결의서");
   const [isFormDropdownOpen, setIsFormDropdownOpen] = useState(false);
   const [title, setTitle] = useState("2026년 2분기 IT 기획팀 운영 경비 지출결의서");
-  const [approvers, setApprovers] = useState<Approver[]>(DEFAULT_APPROVERS);
+  const [approvers, setApprovers] = useState<Approver[]>(getRoleBasedApprovers("지출 결의서"));
+  
   const [showParallelDemo, setShowParallelDemo] = useState(false);
+  const [showAddApproverModal, setShowAddApproverModal] = useState(false); // 수동 추가 모달 상태
   const [files, setFiles] = useState<FileItem[]>([]);
   const [ocrStatus, setOcrStatus] = useState<Record<number, OcrStatus>>({});
   const [showConstraintTooltip, setShowConstraintTooltip] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [roleLineApplied, setRoleLineApplied] = useState(false);
+  const [roleLineApplied, setRoleLineApplied] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [documentData, setDocumentData] = useState<DocumentData>({
@@ -365,7 +467,7 @@ export function ApprovalDocumentPage() {
   if (!isTitleFilled) missingFields.push("제목을 입력해주세요.");
   if (!isBodyFilled) missingFields.push("서식 필수 항목을 완성해주세요.");
 
-  // [방어적 설계: 실행 취소] 결재자 삭제 — 3초 undo 토스트
+  // 결재자 삭제
   const removeApprover = (id: number) => {
     const removed = approvers.find((a) => a.id === id);
     setApprovers((prev) => prev.filter((a) => a.id !== id));
@@ -385,27 +487,59 @@ export function ApprovalDocumentPage() {
     }
   };
 
-  // [요구사항 4-2] Role 기반 결재선 자동 지정
-  const applyRoleBasedLine = () => {
-    setApprovers(ROLE_BASED_LINE);
-    setRoleLineApplied(true);
-    toast.success("결재선 자동 지정 완료", {
-      description: "직책 기준으로 결재선이 자동 매핑되었습니다.",
-    });
-  };
-
-  // [요구사항 4-3] 병렬 합의 데모 토글
+  // 💡 [핵심 로직] 병렬 합의 데모 토글 (배열 완전 교체)
   const toggleParallelDemo = () => {
     if (showParallelDemo) {
-      setApprovers(DEFAULT_APPROVERS);
+      // 끄는 경우 현재 폼에 맞는 기본 직책 결재선으로 원복
+      const newLine = getRoleBasedApprovers(selectedForm);
+      setApprovers(newLine);
       setShowParallelDemo(false);
+      setRoleLineApplied(true);
+      toast.info("기본 결재선으로 복구되었습니다.");
     } else {
-      setApprovers(PARALLEL_DEMO_LINE);
+      // 켜는 경우 병렬 데모 라인으로 강제 교체 (무한 증가 버그 해결을 위해 get 함수 활용)
+      setApprovers(getParallelDemoApprovers()); 
       setShowParallelDemo(true);
+      setRoleLineApplied(false);
+      toast.success("병렬 합의 데모 적용", {
+        description: "2차 결재 단계에 다부서 병렬 합의가 추가되었습니다."
+      });
     }
   };
 
-  // [사항 1] OCR 자동 입력 시뮬레이션
+  // 결재자 수동 추가 핸들러
+  const handleAddManualApprover = (emp: typeof MOCK_EMPLOYEES[0]) => {
+    const maxOrder = approvers.length > 0 ? Math.max(...approvers.map((a) => a.order)) : 0;
+    const newApprover: Approver = {
+      id: Date.now(), // 고유 ID 부여
+      name: emp.name,
+      title: emp.title,
+      dept: emp.dept,
+      initials: emp.initials,
+      order: maxOrder + 1,
+      role: "결재", // 수동 추가 시 기본 역할
+    };
+    
+    // 기존 배열 마지막에 추가
+    setApprovers((prev) => [...prev, newApprover]);
+    setRoleLineApplied(false); // 수동 수정되었으므로 뱃지 제거
+    toast.success(`${emp.name} ${emp.title}님이 결재선에 추가되었습니다.`);
+  };
+
+  // 양식 변경 시 처리
+  const handleFormChange = (form: FormType) => {
+    setSelectedForm(form);
+    setIsFormDropdownOpen(false);
+    setDocumentData({}); // 본문 초기화
+    
+    // 양식 변경 시 해당 양식에 맞는 결재선으로 즉시 교체
+    const newLine = getRoleBasedApprovers(form);
+    setApprovers(newLine);
+    setRoleLineApplied(true);
+    setShowParallelDemo(false);
+  };
+
+  // OCR 자동 입력 시뮬레이션
   const handleFakeOcrUpload = () => {
     const fakeFile: FileItem = {
       id: Date.now(),
@@ -418,7 +552,6 @@ export function ApprovalDocumentPage() {
 
     setTimeout(() => {
       setOcrStatus((prev) => ({ ...prev, [fakeFile.id]: "done" }));
-      // OCR 결과 자동 입력
       setDocumentData((prev) => ({ ...prev, totalAmount: "1,500,000" }));
       toast.success("OCR 텍스트 추출 완료", {
         description: "청구 금액 필드에 1,500,000원이 자동 입력되었습니다.",
@@ -514,7 +647,7 @@ export function ApprovalDocumentPage() {
                         {isFormDropdownOpen && (
                           <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg overflow-hidden">
                             {FORM_TYPES.map((form) => (
-                              <button key={form} onClick={() => { setSelectedForm(form); setIsFormDropdownOpen(false); setDocumentData({}); }}
+                              <button key={form} onClick={() => handleFormChange(form)}
                                 className={`w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors ${selectedForm === form ? "bg-blue-50 text-blue-700" : "text-gray-700"}`}>
                                 {form}
                               </button>
@@ -524,7 +657,7 @@ export function ApprovalDocumentPage() {
                       </div>
                     </div>
 
-                    {/* ② 결재선 — Role 기반 자동 지정 + 병렬 트리 */}
+                    {/* ② 결재선 — Role 기반 매핑 내역 및 병렬 트리 */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <label className="text-sm text-gray-700">결재선 <span className="text-red-500">*</span></label>
@@ -537,34 +670,38 @@ export function ApprovalDocumentPage() {
                         </div>
                       </div>
 
-                      {/* [요구사항 4-2] Role 기반 자동 지정 버튼 */}
+                      {/* 병렬 데모 전환 버튼 */}
                       <div className="flex gap-2 flex-wrap">
-                        <button
-                          onClick={applyRoleBasedLine}
-                          className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                        >
-                          <Zap size={12} /> 직책 기반 결재선 자동 지정
-                        </button>
                         <button
                           onClick={toggleParallelDemo}
                           className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
                         >
-                          <Users size={12} /> {showParallelDemo ? "기본 결재선" : "병렬 합의 데모"}
+                          <Users size={12} /> {showParallelDemo ? "기본 결재선으로 복구" : "병렬 합의 데모 적용"}
                         </button>
                       </div>
 
-                      {/* [방어적 설계: 명확한 공지] 자동 매핑 안내 */}
+                      {/* 자동 매핑 안내 문구 (요청에 따라 "수동검색..." 멘트 삭제 및 문구 간결화) */}
                       {roleLineApplied && (
                         <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
                           <Info size={12} className="text-blue-500 mt-0.5 shrink-0" />
-                          <p className="text-xs text-blue-700">수동으로 사용자 검색할 필요 없이, 조직도 시스템의 직책 기준으로 자동 매핑되었습니다.</p>
+                          <p className="text-xs text-blue-700">
+                            선택하신 양식({selectedForm})에 맞추어 결재선이 자동 설정되었습니다.
+                          </p>
                         </div>
                       )}
 
-                      {/* [요구사항 F] 병렬 결재선 트리 시각화 */}
+                      {/* [요구사항 F] 병렬 결재선 트리 혹은 일반 결재선 시각화 */}
                       {showParallelDemo ? (
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                           <ApprovalTreeRenderer approvers={approvers} />
+                          <div className="flex justify-center mt-4">
+                            <button
+                              onClick={() => setShowAddApproverModal(true)}
+                              className="flex items-center gap-1 text-xs text-blue-600 border border-dashed border-blue-300 px-4 py-2 rounded-md hover:bg-blue-50 transition-colors"
+                            >
+                              <Plus size={12} /> 결재자 추가
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 flex-wrap pt-1">
@@ -579,15 +716,19 @@ export function ApprovalDocumentPage() {
                                   <p className="text-xs text-gray-800" style={{ fontWeight: 600 }}>{approver.name}</p>
                                   <p className="text-xs text-gray-500">{approver.title} · {approver.dept}</p>
                                 </div>
-                                {/* [요구사항 B] 역할 표시 */}
-                                <span className="ml-1 text-xs bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">
+                                {/* 역할 표시 */}
+                                <span className={`ml-1 text-xs border px-1.5 py-0.5 rounded ${
+                                  approver.role === "검토" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                                  approver.role === "합의" || approver.role === "재무합의" ? "bg-purple-50 text-purple-600 border-purple-200" :
+                                  "bg-blue-50 text-blue-600 border-blue-200"
+                                }`}>
                                   {approver.role}
                                 </span>
-                                {/* [요구사항 B] 전결 버튼 */}
+                                {/* 전결 버튼 */}
                                 {approver.canJunggyo && (
                                   <span className="text-xs bg-purple-50 text-purple-600 border border-purple-200 px-1.5 py-0.5 rounded ml-1">전결</span>
                                 )}
-                                {/* [방어적 설계: 실행 취소] 삭제 버튼 */}
+                                {/* 삭제 버튼 */}
                                 <button
                                   onClick={() => removeApprover(approver.id)}
                                   className="ml-1 w-4 h-4 flex items-center justify-center rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
@@ -597,16 +738,19 @@ export function ApprovalDocumentPage() {
                               </div>
                             </div>
                           ))}
-                          <button className="flex items-center gap-1 text-xs text-blue-600 border border-dashed border-blue-300 px-3 py-2 rounded-md hover:bg-blue-50 transition-colors">
+                          <button
+                            onClick={() => setShowAddApproverModal(true)}
+                            className="flex items-center gap-1 text-xs text-blue-600 border border-dashed border-blue-300 px-3 py-2 rounded-md hover:bg-blue-50 transition-colors"
+                          >
                             <Plus size={11} /> 결재자 추가
                           </button>
                         </div>
                       )}
 
-                      {/* [방어적 설계: 명확한 공지] 결재선 없을 때 */}
+                      {/* 결재선 없을 때 경고 */}
                       {!hasApprovers && (
                         <p className="text-xs text-red-600 flex items-center gap-1">
-                          <AlertCircle size={11} /> 결재선이 지정되지 않았습니다. 템플릿을 불러와 주세요.
+                          <AlertCircle size={11} /> 결재선이 지정되지 않았습니다. 결재자를 추가해 주세요.
                         </p>
                       )}
                     </div>
@@ -653,11 +797,10 @@ export function ApprovalDocumentPage() {
                       />
                     </div>
 
-                    {/* ⑤ [사항 1] OCR 기반 자동 입력 + 첨부파일 */}
+                    {/* ⑤ OCR 기반 자동 입력 + 첨부파일 */}
                     <div className="space-y-2">
                       <label className="text-sm text-gray-700">증빙 서류 첨부 (OCR 자동 입력)</label>
                       <div className="flex gap-2">
-                        {/* 가짜 OCR 업로드 버튼 */}
                         <button
                           onClick={handleFakeOcrUpload}
                           className="flex items-center gap-2 px-4 py-2.5 text-sm border border-dashed border-purple-300 text-purple-600 rounded-md hover:bg-purple-50 hover:border-purple-400 transition-colors"
@@ -720,7 +863,6 @@ export function ApprovalDocumentPage() {
                       onMouseEnter={() => !isSubmitEnabled && setShowConstraintTooltip(true)}
                       onMouseLeave={() => setShowConstraintTooltip(false)}
                     >
-                      {/* [방어적 설계: 제약] 필수값 누락 시 버튼 비활성화 */}
                       <button
                         onClick={handleSubmit}
                         disabled={!isSubmitEnabled}
@@ -731,7 +873,6 @@ export function ApprovalDocumentPage() {
                         {!isSubmitEnabled && <Lock size={13} />}
                         상신하기
                       </button>
-                      {/* [방어적 설계: 명확한 공지] 툴팁 */}
                       {showConstraintTooltip && !isSubmitEnabled && (
                         <div className="absolute bottom-full right-0 mb-2 w-72 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl z-30">
                           <div className="flex items-start gap-2 mb-2">
@@ -831,6 +972,14 @@ export function ApprovalDocumentPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 결재자 추가 모달 */}
+      {showAddApproverModal && (
+        <AddApproverModal
+          onClose={() => setShowAddApproverModal(false)}
+          onAdd={handleAddManualApprover}
+        />
+      )}
 
       {showSubmitModal && (
         <SubmitConfirmModal
