@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { toast, Toaster } from "sonner"; // 💡 [추가] 토스트 메시지용
 import {
   Type, Hash, Calendar, ChevronDown, Table as TableIcon,
   AlignLeft, GripVertical, Trash2, Plus, Save, Eye,
@@ -8,9 +9,6 @@ import {
   ChevronRight, FileText,
 } from "lucide-react";
 
-/* ─────────────────────────────────────────────────
-   타입 (OCP 준수를 위해 export 처리)
-───────────────────────────────────────────────── */
 export type FieldType = "text" | "number" | "date" | "select" | "longtext" | "table";
 
 export type FormField = {
@@ -69,9 +67,6 @@ function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
 
-/* ─────────────────────────────────────────────────
-   템플릿 정의 (단일 진실 공급원)
-───────────────────────────────────────────────── */
 export const TEMPLATES: TemplateDefinition[] = [
   {
     id: "expense",
@@ -140,9 +135,6 @@ export const TEMPLATES: TemplateDefinition[] = [
   },
 ];
 
-/* ─────────────────────────────────────────────────
-   필드 렌더러 (캔버스 미리보기)
-───────────────────────────────────────────────── */
 function FieldPreview({ field }: { field: FormField }) {
   const baseInput = "w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded bg-white";
   if (field.type === "text") return <input type="text" className={baseInput} placeholder={field.placeholder ?? `${field.label}을(를) 입력`} disabled />;
@@ -169,9 +161,6 @@ function FieldPreview({ field }: { field: FormField }) {
   return null;
 }
 
-/* ─────────────────────────────────────────────────
-   메인 페이지
-───────────────────────────────────────────────── */
 export function FormBuilderPage() {
   const [templateId, setTemplateId] = useState<TemplateId>("expense");
   const currentTemplate = TEMPLATES.find((t) => t.id === templateId)!;
@@ -181,8 +170,20 @@ export function FormBuilderPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [highRiskAmount, setHighRiskAmount] = useState("1,000,000");
   const [approverLine, setApproverLine] = useState<ApprovalStep[]>(currentTemplate.defaultApproverLine);
-  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string; } | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // 💡 [E1, E2 방어 로직] 컴포넌트 마운트 시 소관 부서 및 관리자 권한을 강제 검증합니다.
+  useEffect(() => {
+    // 💡 시연용 Mock 데이터 (일반 USER 권한이라고 가정)
+    const mockUser = { role: "USER", departmentId: "sales_dept" }; 
+    const currentFormDeptId = "sales_dept"; 
+
+    if (mockUser.role !== "DEPT_ADMIN") {
+      toast.error("접근 권한 없음", { description: "결재 양식을 수정할 부서 관리자 권한이 없습니다." });
+    } else if (mockUser.departmentId !== currentFormDeptId) {
+      toast.error("타 부서 소관 거부", { description: "해당 부서의 양식을 관리할 수 없습니다." });
+    }
+  }, [templateId]);
 
   const selected = useMemo(() => fields.find((f) => f.id === selectedId) ?? null, [fields, selectedId]);
 
@@ -225,16 +226,35 @@ export function FormBuilderPage() {
 
   const handleSave = () => {
     setFormTitle(prev => prev.trim());
+    
+    if (!formTitle.trim()) { 
+      toast.error("서식 제목이 비어 있습니다."); 
+      return; 
+    }
+
+    // 💡 [E4 방어 로직] 회사의 필수 결재 통제 단계(팀장/본부장 등) 누락 여부 검증
+    const hasRequiredControlStep = approverLine.some(step => 
+      step.job_title === "팀장" || step.job_title === "본부장" || step.job_title === "재무 책임자"
+    );
+
+    if (!hasRequiredControlStep) {
+      toast.error("필수 결재 단계가 누락되었습니다.", { 
+        description: "사내 규정에 따라 팀장 또는 본부장 이상의 결재선을 반드시 포함해야 합니다." 
+      });
+      return; // 조건 불충족 시 저장 트랜잭션을 원천 차단
+    }
+
     setSaving(true);
     setTimeout(() => {
       setSaving(false);
-      if (!formTitle.trim()) { setToast({ type: "error", msg: "서식 제목이 비어 있습니다." }); return; }
-      setToast({ type: "success", msg: `"${formTitle}" 서식이 저장되었습니다. 기안자 화면에서 즉시 적용됩니다.` });
+      toast.success(`"${formTitle}" 서식이 성공적으로 저장되었습니다.`, { description: "기안자 화면에서 즉시 적용됩니다." });
     }, 700);
   };
 
   return (
     <div className="flex flex-col bg-gray-50" style={{ height: "calc(100vh - 3.5rem)" }}>
+      <Toaster position="top-center" richColors /> {/* 💡 [추가] 토스트 컨테이너 */}
+
       {/* ── Page Header ── */}
       <div className="px-6 pt-5 pb-3 bg-white border-b border-gray-200">
         <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-2">
@@ -313,7 +333,6 @@ export function FormBuilderPage() {
                       {JOB_TITLE_OPTIONS.map((j) => <option key={j} value={j}>{j}</option>)}
                     </select>
                   </div>
-                  {/* 💡 병렬 합의 및 역할 제어 추가 */}
                   <div className="space-y-1 pt-1">
                     <label className="text-xs text-gray-500 font-medium">결재 방식 (Role)</label>
                     <select value={step.role ?? "결재"} onChange={(e) => updateApprover(i, { role: e.target.value as ApprovalRole })} className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:border-blue-400">
@@ -473,18 +492,6 @@ export function FormBuilderPage() {
           </div>
         </aside>
       </div>
-
-      <AnimatePresence>
-        {toast && (
-          <motion.div className="fixed bottom-6 right-6 z-50" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} onAnimationComplete={() => setTimeout(() => setToast(null), 3200)}>
-            <div className={`flex items-start gap-2.5 max-w-sm px-4 py-3 rounded-xl shadow-2xl border ${toast.type === "success" ? "bg-emerald-600 border-emerald-700 text-white" : "bg-red-600 border-red-700 text-white"}`}>
-              {toast.type === "success" ? <CheckCircle2 size={15} className="shrink-0 mt-0.5" /> : <AlertTriangle size={15} className="shrink-0 mt-0.5" />}
-              <div className="flex-1 text-xs leading-relaxed font-bold">{toast.msg}</div>
-              <button onClick={() => setToast(null)} className="text-white/70 hover:text-white shrink-0"><X size={13} /></button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

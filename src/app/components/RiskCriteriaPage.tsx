@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
+import { toast, Toaster } from "sonner"; // 💡 [추가] 토스트 메시지용
 import {
   ChevronRight,
   ChevronDown,
@@ -118,6 +119,8 @@ function validate(
   if (num <= 0) {
     return { valid: false, type: "negative", message: "값은 0보다 커야 합니다." };
   }
+  
+  // 💡 [E3 방어 로직] 내부 중복 판별 검사
   const duplicate = existingCriteria.find(
     (c) => c.id !== editingId && c.field === field && c.operator === operator && c.value === num && c.level === level
   );
@@ -155,7 +158,15 @@ function CriterionForm({
 
   const handleSave = () => {
     setTouched(true);
-    if (!canSave) return;
+    if (!canSave) {
+      // 💡 [E3 방어 로직] 리스크 기준 중복 및 에러 시 화면에 에러 토스트 출력
+      if (result.type === "duplicate") {
+        toast.error(result.message, { description: "동일한 조건의 다른 기준값을 입력해주세요." });
+      } else {
+        toast.error(result.message);
+      }
+      return;
+    }
     onSave({ field: field as ConditionField, operator: operator as Operator, value: Number(rawValue.replace(/,/g, "")), unit, level });
   };
 
@@ -180,9 +191,7 @@ function CriterionForm({
       </div>
 
       <div className="px-6 py-5 space-y-5">
-        {/* Form row */}
         <div className="flex items-start gap-4 flex-wrap">
-          {/* Field selector */}
           <div className="space-y-1.5 min-w-[140px]">
             <label className="text-xs text-slate-500 font-medium">조건 필드</label>
             <div className="relative">
@@ -200,7 +209,6 @@ function CriterionForm({
             </div>
           </div>
 
-          {/* Operator */}
           <div className="space-y-1.5 min-w-[130px]">
             <label className="text-xs text-slate-500 font-medium">연산자</label>
             <div className="relative">
@@ -218,7 +226,6 @@ function CriterionForm({
             </div>
           </div>
 
-          {/* Value input */}
           <div className="space-y-1.5 flex-1 min-w-[160px]">
             <label className="text-xs text-slate-500 font-medium">
               기준값 <span className="text-slate-400">{unit && `(${unit})`}</span>
@@ -246,7 +253,6 @@ function CriterionForm({
             </div>
           </div>
 
-          {/* Risk level */}
           <div className="space-y-1.5 min-w-[140px]">
             <label className="text-xs text-slate-500 font-medium">위험 등급</label>
             <div className="flex gap-2">
@@ -269,7 +275,6 @@ function CriterionForm({
           </div>
         </div>
 
-        {/* Inline error */}
         <AnimatePresence>
           {(showDupError || (touched && !result.valid && result.type !== "empty" && rawValue.trim())) && (
             <motion.div
@@ -295,7 +300,6 @@ function CriterionForm({
         </AnimatePresence>
       </div>
 
-      {/* Footer */}
       <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
         <button onClick={onCancel} className="px-5 py-2.5 text-sm text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors shadow-sm font-medium">
           취소
@@ -386,9 +390,22 @@ export function RiskCriteriaPage() {
 
   const selectedForm = forms.find((f) => f.id === selectedFormId)!;
 
-  // 시뮬레이터 상태 관리 및 계산 로직
   const [simField, setSimField] = useState<ConditionField>("금액");
   const [simValue, setSimValue] = useState("");
+
+  // 💡 [E1, E2 방어 로직] 컴포넌트 마운트 시 권한 및 소관 부서 체크
+  useEffect(() => {
+    // 💡 시연을 위해 접속된 사용자(Mock)와 접근하려는 부서가 다르다고 가정합니다.
+    const mockUser = { role: "USER", departmentId: "sales_dept" }; // 일반 유저 권한 부여
+    const currentMenuDeptId = "sales_dept";
+
+    if (mockUser.role !== "DEPT_ADMIN") {
+      toast.error("접근 권한이 없습니다.", { description: "부서 관리자만 리스크 기준을 관리할 수 있습니다." });
+      // 실제 환경에서는 navigate(-1) 등으로 튕겨내지만 시연을 위해 유지
+    } else if (mockUser.departmentId !== currentMenuDeptId) {
+      toast.error("타 부서 소관 거부", { description: "해당 부서 양식을 수정할 권한이 없습니다." });
+    }
+  }, []);
 
   const getSimulatedRisk = () => {
     if (!simValue) return null;
@@ -431,7 +448,7 @@ export function RiskCriteriaPage() {
       )
     );
     setShowAddForm(false);
-    showToast("리스크 기준이 추가되었습니다.");
+    toast.success("리스크 기준이 추가되었습니다.");
   };
 
   const handleEdit = (data: Omit<RiskCriterion, "id" | "createdAt">) => {
@@ -445,7 +462,7 @@ export function RiskCriteriaPage() {
       )
     );
     setEditTarget(undefined);
-    showToast("리스크 기준이 수정되었습니다.");
+    toast.success("리스크 기준이 수정되었습니다.");
   };
 
   const handleDelete = () => {
@@ -456,11 +473,12 @@ export function RiskCriteriaPage() {
       )
     );
     setDeleteTarget(undefined);
-    showToast("리스크 기준이 삭제되었습니다.");
+    toast.success("리스크 기준이 삭제되었습니다.");
   };
 
   return (
     <>
+      <Toaster position="top-center" richColors /> {/* 💡 [추가] 토스트 렌더링 */}
       <div className="p-8 max-w-[1400px] mx-auto space-y-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-slate-500">
