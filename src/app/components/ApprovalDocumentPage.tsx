@@ -221,19 +221,25 @@ export function ApprovalDocumentPage() {
   const [title, setTitle] = useState(`2026년 2분기 ${TEMPLATES[0].name} 기안`);
   
   // 💡 [해결 3] 템플릿(FormBuilder)에 정의된 직위/직책/역할/전결 기준 결재선 자동 생성
+  // 1. generateApproversFromTemplate 함수 수정 (약 205번 라인 부근)
   const generateApproversFromTemplate = (tpl: TemplateDefinition): Approver[] => {
     const ts = Date.now();
-    return tpl.defaultApproverLine.map((step, idx) => ({
-      id: ts + idx,
-      name: step.job_title === "본부장" ? "이수연" : step.job_title === "재무 책임자" ? "오재무" : step.job_title === "실장" ? "김실장" : `담당자${idx+1}`,
-      title: step.job_title === "제한 없음" ? "담당자" : step.job_title,
-      dept: "관련부서",
-      order: idx + 1,
-      initials: step.job_title === "제한 없음" ? "담" : step.job_title.charAt(0),
-      role: step.role ?? "결재",
-      canJunggyo: step.canJunggyo ?? false,
-      parallelGroup: step.role === "합의" || step.role === "재무합의" ? 1 : undefined,
-    }));
+    return tpl.defaultApproverLine.map((step, idx) => {
+      // 하드코딩 제거: 실제 시스템에서는 GET /api/v1/users?job_title=... 를 호출함을 가정
+      const matchedEmployee = MOCK_EMPLOYEES.find(e => e.title === step.job_title);
+    
+      return {
+        id: ts + idx,
+        name: matchedEmployee ? matchedEmployee.name : `[${step.job_title} 자동할당]`,
+        title: step.job_title,
+        dept: matchedEmployee ? matchedEmployee.dept : "관련부서",
+        order: idx + 1,
+        initials: matchedEmployee ? matchedEmployee.initials : step.job_title.charAt(0),
+        role: step.role ?? "결재",
+        canJunggyo: step.canJunggyo ?? false,
+        parallelGroup: step.role === "합의" || step.role === "재무합의" ? 1 : undefined,
+      };
+    });
   };
 
   const [approvers, setApprovers] = useState<Approver[]>(generateApproversFromTemplate(TEMPLATES[0]));
