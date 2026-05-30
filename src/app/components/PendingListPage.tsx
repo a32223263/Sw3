@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -10,7 +10,6 @@ import {
   ListChecks,
   Eye,
   ShieldAlert,
-  X,
   Lock,
   Search,
 } from "lucide-react";
@@ -188,6 +187,8 @@ export function PendingListPage() {
   const isOnline = useOnlineStatus();
   const [isLoading, setIsLoading] = useState(true);
   const [docs, setDocs] = useState(PENDING_DOCS);
+  
+  // 선택된 문서들의 ID를 관리하는 Set
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
 
@@ -210,75 +211,84 @@ export function PendingListPage() {
     return () => clearTimeout(t);
   }, []);
 
-  // 필터 적용
+  // 필터 적용된 문서 목록
   const filteredDocs = docs.filter((d) => {
     if (searchQuery && !d.title.includes(searchQuery) && !d.requester.includes(searchQuery)) return false;
     if (formFilter !== "all" && !d.form.includes(formFilter)) return false;
     return true;
   });
 
-  // 일괄 처리가 가능한(일반) 문서들만 별도 추출
-  const batchableDocs = filteredDocs.filter((d) => d.canBatch && d.risk !== "HIGH");
-  const batchableIds = new Set(batchableDocs.map((d) => d.id));
-  const selectedBatchable = [...selected].filter((id) => batchableIds.has(id));
+  // 선택 상태 변수들
+  const allBatchSelected = filteredDocs.length > 0 && selected.size === filteredDocs.length;
+  const someBatchSelected = selected.size > 0 && !allBatchSelected;
 
+  // 💡 개별 선택 토글 (고위험 문서도 선택 가능하게 하여 에러 시연 유도)
   const toggleDoc = (id: string) => {
-    const doc = docs.find((d) => d.id === id);
-    if (!doc) return;
-    
-    if (doc.risk === "HIGH" || !doc.canBatch) {
-      toast.error("고위험 문서는 일괄 승인이 불가하며, 개별 2FA 인증이 필요합니다.", {
-        icon: <ShieldAlert size={16} className="text-red-500" />
-      });
-      return;
-    }
-
     const next = new Set(selected);
     next.has(id) ? next.delete(id) : next.add(id);
     setSelected(next);
   };
 
-  const allBatchSelected = batchableDocs.length > 0 && selectedBatchable.length === batchableDocs.length;
-  const someBatchSelected = selectedBatchable.length > 0 && !allBatchSelected;
-
+  // 💡 화면에 보이는(필터링된) 모든 문서 전체 선택/해제 토글
   const toggleAll = () => {
     if (allBatchSelected) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(batchableDocs.map((d) => d.id)));
+      setSelected(new Set(filteredDocs.map((d) => d.id)));
     }
   };
 
+  // 💡 [유스케이스 E6] 일괄 결재 버튼 클릭 로직
   const handleBatchClick = () => {
-    if (selectedBatchable.length === 0) return;
+    if (selected.size === 0) return;
 
-    // 💡 [E6 방어 로직] 혹시라도 필터를 뚫고 선택된 문서 중에 고위험 문서가 존재하는지 강제 재검증
-    const selectedDocsList = docs.filter(d => selected.has(d.id));
-    const hasHighRisk = selectedDocsList.some(doc => doc.risk === "HIGH" || !doc.canBatch);
-    
-    if (hasHighRisk) {
-      toast.error("고위험 문서는 일괄 결재할 수 없습니다.", { 
-        description: "선택 항목 중 고위험 문서가 포함되어 있습니다. 개별 확인 후 승인해주세요." 
+    // 선택된 문서 중 '고위험(HIGH)'이거나 일괄 결재 불가(canBatch=false)인 문서 필터링
+    const highRiskIds = Array.from(selected).filter(id => {
+      const doc = docs.find(d => d.id === id);
+      return doc && (doc.risk === "HIGH" || !doc.canBatch);
+    });
+
+    // 🚨 E6 흐름: 고위험 문서가 포함되어 있는 경우
+    if (highRiskIds.length > 0) {
+      // 기존 토스트 모두 닫기 (메시지가 명확하게 보이도록)
+      toast.dismiss(); 
+      
+      // 보고서 요구사항과 100% 일치하는 에러 메시지 출력
+      toast.error("고위험 문서는 일괄 결재할 수 없습니다. 개별 확인 후 승인해주세요.", {
+        duration: 6000, // 충분히 읽을 수 있도록 시간 늘림
+        action: {
+          label: "고위험 제외하기",
+          onClick: () => {
+            // 고위험 문서만 선택에서 제외
+            const nextSelected = new Set(selected);
+            highRiskIds.forEach(id => nextSelected.delete(id));
+            setSelected(nextSelected);
+            toast.info("고위험 문서가 선택 해제되었습니다. 다시 진행해주세요.");
+          }
+        }
       });
-      return; // 확인 모달 자체를 띄우지 않고 트랜잭션 중단
+      return; // 진행 중단
     }
-
+    
+    // 고위험 문서가 없다면 정상 승인 모달 띄우기
     setShowBatchConfirm(true);
   };
 
+  // 💡 [유스케이스 A4] 일괄 승인 최종 확정 로직
   const handleBatchConfirm = () => {
     if (!isOnline) {
       toast.success("승인 내용이 대기열에 저장되었습니다. 네트워크 복구 시 자동 전송됩니다.");
       setShowBatchConfirm(false);
       return;
     }
-    const count = selectedBatchable.length;
-    setDocs((prev) => prev.filter((d) => !selectedBatchable.includes(d.id)));
-    setSelected(new Set());
+    
+    // 1d: 문서를 순차적으로 자동 승인 처리 (선택된 일반 문서만 목록에서 제거)
+    setDocs((prev) => prev.filter((d) => !selected.has(d.id)));
+    setSelected(new Set()); // 선택 초기화
     setShowBatchConfirm(false);
-    toast.success(`${count}건이 승인되었습니다.`, {
-      description: "선택된 일반 문서가 정상적으로 다음 결재자에게 전달되었습니다.",
-    });
+    
+    // ✅ A4 흐름: 보고서 텍스트 완벽 일치
+    toast.success("선택한 항목이 모두 승인되었습니다");
   };
 
   if (isLoading) return <ListSkeleton />;
@@ -315,7 +325,7 @@ export function PendingListPage() {
             ))}
           </div>
 
-          {/* [요구사항 D] 다중 검색 필터 바 */}
+          {/* 다중 검색 필터 바 */}
           <div className="flex items-center gap-3 flex-wrap bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center gap-2 px-3 border-r border-slate-100">
               <Filter size={16} className="text-slate-400 shrink-0" />
@@ -406,7 +416,7 @@ export function PendingListPage() {
                   allBatchSelected ? "bg-blue-500 border-blue-500 cursor-pointer" : "border-slate-300 bg-white cursor-pointer hover:border-blue-400"
                 }`}
                 onClick={toggleAll}
-                title="일반 문서 전체 선택"
+                title="전체 문서 선택"
               >
                 {allBatchSelected && <CheckCircle2 size={14} className="text-white" />}
                 {someBatchSelected && <div className="w-2.5 h-0.5 bg-blue-500 rounded" />}
@@ -440,18 +450,15 @@ export function PendingListPage() {
                   >
                     {/* Checkbox */}
                     <div
-                      title={isHighRisk ? "고위험 문서는 개별 심사가 필요합니다." : "일괄 승인 선택"}
+                      title={isHighRisk ? "고위험 문서 (일괄결재 불가 시연용)" : "문서 선택"}
                       className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                        isHighRisk
-                          ? "border-slate-200 bg-slate-100 cursor-not-allowed opacity-70"
-                          : isSelected
+                        isSelected
                           ? "bg-blue-500 border-blue-500 cursor-pointer shadow-sm"
                           : "border-slate-300 bg-white cursor-pointer hover:border-blue-400"
                       }`}
                       onClick={() => toggleDoc(doc.id)}
                     >
                       {isSelected && <CheckCircle2 size={14} className="text-white" />}
-                      {isHighRisk && <Lock size={12} className="text-slate-400" />}
                     </div>
 
                     {/* Title & Info */}
@@ -520,7 +527,7 @@ export function PendingListPage() {
 
       {showBatchConfirm && (
         <BatchConfirmDialog
-          count={selectedBatchable.length}
+          count={selected.size}
           onConfirm={handleBatchConfirm}
           onClose={() => setShowBatchConfirm(false)}
         />
